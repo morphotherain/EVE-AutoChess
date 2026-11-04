@@ -1,0 +1,84 @@
+# EVE 星视寰宇 · Caddy 站点配置（目标版本 v2.11.7）
+#
+# 三条硬要求：
+#   1) https://xshy.top / https://www.xshy.top 自动签发 Let's Encrypt 证书
+#   2) http://49.233.138.141 保持原样、**绝不跳转**
+#      —— 老客户端的热更地址写死成这个 IP 的 http，跳了就全挂
+#   3) http://xshy.top 命中域名的一律 308 升级到 https
+#
+# 部署：cp 到 /etc/caddy/Caddyfile 后 systemctl reload caddy
+# 校验：caddy validate --config <本文件> --adapter caddyfile
+
+{
+	servers {
+		timeouts {
+			read_body 10s
+			read_header 10s
+			idle 45s
+		}
+	}
+	# [WHY] 关掉 Caddy 自动加的 80→443 跳转，改由下面 :80 里按 Host 精确判断，
+	#       否则它会给 xshy.top 也插一条无差别跳转，和 IP 入口打架。
+	auto_https disable_redirects
+}
+
+# 站点处理逻辑只写一份，IP 站和域名站共用
+(eve_site) {
+	root * /var/www/eve
+
+	# 1) 只允许读请求：挡掉 PUT/POST/DELETE 之类的探测
+	@bad not method GET HEAD
+	respond @bad "method not allowed" 405
+
+	# 2) 目录浏览关掉（原来 browse 会把 /update/pck/ 下列表直接吐出去）
+	file_server
+
+	# 3) 缓存策略：清单不缓存（要能立刻感知新版本），包长缓存（文件名带版本号）
+	@meta path /update/version.json
+	header @meta Cache-Control "no-store"
+	@pck path /update/pck/*
+	header @pck Cache-Control "public, max-age=604800, immutable"
+
+	# 4) 抹掉版本指纹，别告诉扫描器我是谁
+	header {
+		-Server
+		-X-Powered-By
+		X-Content-Type-Options "nosniff"
+	}
+
+	encode zstd gzip
+}
+
+:80 {
+	# 域名进来的升级到 https；IP 直接进来的（老客户端）原样放行
+	@domain host xshy.top www.xshy.top
+	redir @domain https://{host}{uri} 308
+
+	import eve_site
+
+	# 5) 访问日志：出事了才有据可查
+	log {
+		output file /var/lib/caddy/eve-access.log {
+			roll_size 20MiB
+			roll_keep 3
+		}
+		format json
+	}
+}
+
+xshy.top, www.xshy.top {
+	import eve_site
+
+	# 证书由 Caddy 自动申请（HTTP-01 走 80 / TLS-ALPN 走 443），这里只限协议版本
+	tls {
+		protocols tls1.2 tls1.3
+	}
+
+	log {
+		output file /var/lib/caddy/eve-access.log {
+			roll_size 20MiB
+			roll_keep 3
+		}
+		format json
+	}
+}
