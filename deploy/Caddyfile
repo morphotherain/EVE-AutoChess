@@ -14,7 +14,10 @@
 		timeouts {
 			read_body 10s
 			read_header 10s
-			idle 45s
+			# ⚠️ 这个只对「完全没流量」的连接生效。WebSocket 长连接靠服务端
+			#    每 30 秒一帧 ping 保活（见 tools/relay/ws_relay_server.js），
+			#    这里有流量就不算空闲 ⇒ 建房后挂在大厅等人也不会被掐。
+			idle 120s
 		}
 	}
 	# [WHY] 关掉 Caddy 自动加的 80→443 跳转，改由下面 :80 里按 Host 精确判断，
@@ -29,6 +32,13 @@
 	# 1) 只允许读请求：挡掉 PUT/POST/DELETE 之类的探测
 	@bad not method GET HEAD
 	respond @bad "method not allowed" 405
+
+	# 1.5) 联机中继（WebSocket）—— 网页版斗地主建房/加入走这里
+	#      [WHY] 浏览器没有 UDP，ENet 那条路在网页上不存在；只能靠 ws。
+	#      ⚠️ `path /relay /relay/*` 两个都写：Caddy 不会把 /relay 当成 /relay/* 的前缀。
+	#      ⚠️ 后端只监听 127.0.0.1，对外永远只有 443 一个洞。
+	@relay path /relay /relay/*
+	reverse_proxy @relay 127.0.0.1:27101
 
 	# 2) 目录浏览关掉（原来 browse 会把 /update/pck/ 下列表直接吐出去）
 	#    precompressed gzip：有 `<文件>.gz` 时直接吐压缩版（网页版 wasm 38MB → 9.7MB），

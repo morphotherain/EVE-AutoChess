@@ -380,6 +380,20 @@ func _stream_seconds(st: AudioStream) -> float:
 ##    且不同引擎版本对 `.remap` 的暴露方式不一样（有的把 `menu_01.ogg.remap`
 ##    原样列出来）。判死一种写法 → 导出后 BGM 全静音**且不报错**。
 ##    所以：先剥掉 `.remap` 再按扩展名认。
+## 文件名（**不带扩展名**）→ 音效逻辑名：去掉末尾的 `_NN` 变体号。
+##
+## ⚠️ 抽成函数是因为「扫目录」和「网页版清单」两条路都要用它 ——
+##    两份实现迟早会漂，漂了的表现就是「同一个音在某些端上找不到」。
+func _logical_name(base: String) -> String:
+	var logical := base
+	var us := base.rfind("_")
+	if us > 0:
+		var tail := base.substr(us + 1)
+		if tail.is_valid_int():
+			logical = base.substr(0, us)
+	return logical
+
+
 func _scan_dir(dir_path: String) -> Dictionary:
 	var out: Dictionary = {}
 	var names := _list_files(dir_path)
@@ -395,12 +409,7 @@ func _scan_dir(dir_path: String) -> Dictionary:
 		seen[real] = true
 		var base := real.get_basename()
 		# 逻辑名 = 去掉末尾的 _NN 变体号
-		var logical := base
-		var us := base.rfind("_")
-		if us > 0:
-			var tail := base.substr(us + 1)
-			if tail.is_valid_int():
-				logical = base.substr(0, us)
+		var logical := _logical_name(base)
 		var stream := _load_stream(dir_path.path_join(real))
 		if stream != null:
 			if not out.has(logical):

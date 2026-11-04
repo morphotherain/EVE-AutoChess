@@ -29,6 +29,12 @@ const RC := preload("res://scripts/net/eve_room_code.gd")
 const RELAY := preload("res://scripts/net/eve_relay_list.gd")
 const TUN := preload("res://scripts/net/eve_tunnel.gd")
 const TP := preload("res://scripts/net/eve_ddz_transport.gd")
+## ★ 2026-11-04：网页版走 WebSocket（浏览器没有 UDP socket，ENet 那条路不存在）。
+##   两套传输层**接口一致**，本类只负责选一个 —— 会话层与 UI 完全不用知道差别。
+const TP_WS := preload("res://scripts/net/eve_ws_transport.gd")
+## 房主在传输层的固定 id（两套传输层都用 1 = 房主）。⛔ 别再写 `TP.SERVER_ID`：
+## 一旦改走 WS 传输层，那个常量属于另一个脚本，指过去就解析不到了。
+const SERVER_PEER := 1
 
 enum State { IDLE, TUNNEL, LISTENING, CONNECTING, PLAYING, FAILED }
 enum Msg { HELLO, ACCEPT, REJECT, SNAP, CMD, PING, AVATAR }
@@ -36,7 +42,10 @@ enum Msg { HELLO, ACCEPT, REJECT, SNAP, CMD, PING, AVATAR }
 ## 房主是否要手动确认每个加入者（2026-10-12 用户定：要）
 var needs_approval := true
 ## 跳过内核，直接用 ENet 连（局域网模式 / 无头验收）
+## ★ 网页版恒为 true：浏览器既没有 TUN 也没有 UDP，内核那条路整条不存在。
 var skip_tunnel := false
+## 强行走 WebSocket 传输层（只在本地做 WS 中继验收时置 true；正常运行按平台判断）
+var force_ws := false
 ## 目标 IP。默认 127.0.0.1（内核转发口）；局域网降级时可填房主的局域网 IP
 var peer_ip := "127.0.0.1"
 ## 玩家自定义会合节点（设置面板里填；空 = 只用内置）
@@ -112,6 +121,7 @@ func tick(now_ms: int) -> void:
 ## `avatar` 为本机玩家头像字节（可为空）。
 func create_room(name: String, now_ms: int, seed_for_code: int = 0,
 		avatar: PackedByteArray = PackedByteArray()) -> bool:
+	_force_web_mode()
 	is_host = true
 	display_name = name
 	my_avatar = avatar
@@ -190,7 +200,7 @@ func send_command(kind: int, payload: Dictionary = {}) -> Dictionary:
 	if net == null or state != State.PLAYING:
 		return {}
 	var c: Dictionary = net.client_make_command(kind, payload)
-	_tp.send_to(TP.SERVER_ID, {"t": Msg.CMD, "d": c})
+	_tp.send_to(SERVER_PEER, {"t": Msg.CMD, "d": c})
 	return {}
 
 
@@ -329,6 +339,7 @@ func _push_seat(seat: int) -> void:
 ## 加入房间。`avatar` 为本机玩家头像字节（可为空）。
 func join_room(room_code: String, name: String, now_ms: int,
 		avatar: PackedByteArray = PackedByteArray()) -> bool:
+	_force_web_mode()
 	is_host = false
 	display_name = name
 	my_avatar = avatar
@@ -366,25 +377,46 @@ func _start_net_client(now_ms: int) -> void:
 
 
 func _send_hello() -> void:
-	_tp.send_to(TP.SERVER_ID, {"t": Msg.HELLO, "name": display_name,
+	_tp.send_to(SERVER_PEER, {"t": Msg.HELLO, "name": display_name,
 			"ver": TUN.VERSION, "avatar": my_avatar})
 
 
 func _send_ping(now_ms: int) -> void:
-	_tp.send_to(TP.SERVER_ID, {"t": Msg.PING, "now_ms": now_ms})
+	_tp.send_to(SERVER_PEER, {"t": Msg.PING, "now_ms": now_ms})
 
 
 # ══════════════════════════════════════════════════════════ 传输接线
 
 func _start_transport() -> void:
-	_tp = TP.new()
+	var tp_script = TP_WS if _use_ws() else TP
+	_tp = tp_script.new()
 	_tp.name = "DdzTransport"
 	add_child(_tp)
+	# ⚠️ 只有 WS 版需要房间码（ENet 靠隧道内部的网络名隔离）。
+	#    用 `has_method` 判断而不是按平台分支：同一份调用在两种传输层下都成立。
+	if _tp.has_method("set_room"):
+		_tp.set_room(code)
 	_tp.peer_joined.connect(_on_peer_joined)
 	_tp.peer_left.connect(_on_peer_left)
 	_tp.connected_ok.connect(_on_connected)
 	_tp.connect_failed.connect(func(): _fail(_tp.last_error))
 	_tp.packet.connect(_on_packet)
+
+
+## 是否走 WebSocket 传输层。
+##
+## [WHY] 网页版**必须**：浏览器没有 UDP socket，也没有 TUN 可建。
+##   非网页版一律仍用 ENet（延迟更低，且已有的 UDP 中继/隧道全都依赖它）。
+func _use_ws() -> bool:
+	return OS.has_feature("web") or force_ws
+
+
+## 网页版恒跳过内核：浏览器既没有 TUN（VpnService/网卡都没有）也没有 UDP socket。
+## ⚠️ 放在 `create_room()/join_room()` 开头而不是 `_init()`：验收脚本会在
+##    运行中途改 `skip_tunnel` 去测「内核起不来」的降级路径，构造期写死会把那条路堵死。
+func _force_web_mode() -> void:
+	if OS.has_feature("web"):
+		skip_tunnel = true
 
 
 func _on_peer_joined(peer_id: int) -> void:
