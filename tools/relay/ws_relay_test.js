@@ -18,13 +18,15 @@ const crypto = require('crypto');
 const PORT = parseInt(process.argv[2] || '27101', 10);
 const HOST = process.argv[3] || '127.0.0.1';
 const TLS = (process.argv[4] || 'ws') === 'wss';
+// 可选第 5 个参数：实际连接的 IP（DNS 还没生效时用，SNI 仍然是 HOST）
+const CONNECT_IP = process.argv[5] || HOST;
 const ROOM = 'TESTROOM';
 
 function connect() {
   return new Promise((resolve, reject) => {
     const sock = TLS
-      ? tls.connect({ host: HOST, port: PORT, servername: HOST })
-      : net.connect(PORT, HOST);
+      ? tls.connect({ host: CONNECT_IP, port: PORT, servername: HOST })
+      : net.connect(PORT, CONNECT_IP);
     const key = crypto.randomBytes(16).toString('base64');
     sock.on(TLS ? 'secureConnect' : 'connect', () => {
       sock.write(
