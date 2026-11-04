@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>星视寰宇自走棋 · 下载</title>
+<meta name="description" content="EVE 题材回合制舰队自走棋。32 艘舰船、4 大势力、装备与羁绊。Windows / Android 免费下载。" />
+<meta name="theme-color" content="#070B12" />
+<style>
+  :root{
+    --bg:        #070B12;
+    --bg-2:      #0C131E;
+    --panel:     #101A28;
+    --line:      #1D2C40;
+    --text:      #E4EDF9;
+    --dim:       #8094AC;
+    --cyan:      #29ADFF;
+    --gold:      #F5C042;
+    --win:       #3FA9F5;
+    --android:   #7ED957;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:"PingFang SC","Microsoft YaHei","Source Han Sans SC",system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+
+  #stars{position:fixed;inset:0;z-index:0;pointer-events:none}
+
+  .wrap{
+    position:relative;z-index:2;
+    max-width:1080px;margin:0 auto;
+    padding:0 24px 72px;
+  }
+
+  /* ── 顶栏 ── */
+  .top{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:28px 0 0;
+    font-size:12px;letter-spacing:.14em;color:var(--dim);
+  }
+  .brand{display:flex;align-items:center;gap:10px;color:var(--text);font-weight:600;letter-spacing:.1em}
+  .brand .dot{
+    width:7px;height:7px;background:var(--cyan);
+    box-shadow:0 0 10px var(--cyan);
+    animation:pulse 2.6s ease-in-out infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+  .top .ver{
+    border:1px solid var(--line);padding:5px 11px;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+    color:var(--cyan);letter-spacing:.06em;
+  }
+
+  /* ── Hero ── */
+  .hero{padding:76px 0 0;text-align:center}
+  .kicker{
+    font-size:12px;letter-spacing:.42em;color:var(--gold);
+    text-indent:.42em;margin-bottom:22px;
+  }
+  h1{
+    font-size:clamp(38px,7vw,76px);
+    line-height:1.04;
+    letter-spacing:.06em;
+    text-indent:.06em;
+    font-weight:800;
+    background:linear-gradient(180deg,#FFFFFF 30%,#8FC8EE 100%);
+    -webkit-background-clip:text;background-clip:text;
+    color:transparent;
+    filter:drop-shadow(0 0 26px rgba(41,173,255,.28));
+  }
+  .sub{
+    margin-top:26px;font-size:clamp(14px,1.6vw,17px);
+    color:var(--dim);letter-spacing:.1em;
+  }
+  .sub b{color:var(--text);font-weight:600}
+  .rule{
+    width:min(460px,72%);height:1px;margin:34px auto 0;
+    background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+    opacity:.5;
+  }
+
+  /* ── 下载 ── */
+  .dl{
+    display:grid;grid-template-columns:1fr 1fr;gap:16px;
+    margin:52px auto 0;max-width:760px;
+  }
+  .btn{
+    position:relative;display:flex;align-items:center;gap:16px;
+    padding:20px 84px 20px 22px;text-decoration:none;color:var(--text);
+    background:linear-gradient(180deg,rgba(29,44,64,.5),rgba(16,26,40,.9));
+    border:1px solid var(--line);
+    transition:border-color .18s,transform .18s,box-shadow .25s;
+    overflow:hidden;
+  }
+  .btn::before{
+    content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+    background:var(--accent);opacity:.85;
+  }
+  .btn::after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,.07) 50%,transparent 70%);
+    transform:translateX(-120%);transition:transform .55s ease;
+  }
+  .btn:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 12px 34px -14px var(--accent)}
+  .btn:hover::after{transform:translateX(120%)}
+  .btn:active{transform:translateY(0)}
+  .btn.win{--accent:var(--win)}
+  .btn.apk{--accent:var(--android)}
+  .btn svg{width:26px;height:26px;flex:none;fill:var(--accent)}
+  .btn .t{flex:1;min-width:0;text-align:left;display:flex;flex-direction:column;gap:6px}
+  .btn .t1{display:block;font-size:17px;font-weight:700;letter-spacing:.06em;white-space:nowrap}
+  .btn .t2{display:block;font-size:12px;color:var(--dim);letter-spacing:.04em;line-height:1.45}
+  .btn .sz{
+    position:absolute;right:22px;top:50%;transform:translateY(-50%);
+    font-family:ui-monospace,Consolas,monospace;font-size:12px;
+    color:var(--dim);white-space:nowrap;
+  }
+
+  .note{
+    margin:18px auto 0;max-width:760px;
+    font-size:12px;color:var(--dim);letter-spacing:.05em;text-align:center;line-height:1.9;
+  }
+  .note .hi{color:var(--cyan)}
+
+  /* ── 信息卡 ── */
+  .cards{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:14px;
+    margin:64px 0 0;
+  }
+  .card{
+    border:1px solid var(--line);
+    background:rgba(16,26,40,.55);
+    padding:22px 20px;
+  }
+  .card .k{
+    font-size:11px;letter-spacing:.22em;color:var(--cyan);
+    margin-bottom:12px;
+  }
+  .card .v{font-size:14px;line-height:1.85;color:#B9C9DC}
+  .card .v em{font-style:normal;color:var(--gold)}
+
+  /* ── 社群 ── */
+  .join{
+    margin:64px 0 0;padding:30px 26px;
+    border:1px solid var(--line);
+    background:
+      radial-gradient(120% 140% at 50% 0%,rgba(41,173,255,.09),transparent 62%),
+      rgba(12,19,30,.7);
+    text-align:center;
+  }
+  .join .h{font-size:15px;letter-spacing:.14em;color:var(--text);margin-bottom:14px}
+  .join .q{
+    display:inline-block;
+    font-family:ui-monospace,Consolas,monospace;
+    font-size:clamp(24px,4vw,34px);letter-spacing:.12em;
+    color:var(--cyan);text-shadow:0 0 24px rgba(41,173,255,.4);
+  }
+  .join .s{margin-top:12px;font-size:12px;color:var(--dim);letter-spacing:.08em}
+
+  footer{
+    margin:56px 0 0;padding-top:26px;
+    border-top:1px solid var(--line);
+    font-size:11px;color:#5D6F86;letter-spacing:.08em;
+    display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  }
+
+  @media (max-width:720px){
+    .hero{padding-top:48px}
+    .dl{grid-template-columns:1fr;margin-top:38px}
+    .cards{grid-template-columns:1fr;margin-top:44px}
+    .join{margin-top:44px}
+    .btn .sz{display:none}
+    .btn{padding-right:22px}
+    .top{padding-top:18px;font-size:11px}
+    .wrap{padding:0 18px 56px}
+    footer{flex-direction:column;gap:8px}
+  }
+</style>
+</head>
+<body>
+<canvas id="stars" aria-hidden="true"></canvas>
+
+<div class="wrap">
+
+  <div class="top">
+    <div class="brand"><span class="dot"></span>星视寰宇</div>
+    <div class="ver" id="verTag">v0.14.10</div>
+  </div>
+
+  <section class="hero">
+    <div class="kicker">E V E &nbsp;·&nbsp; 舰 队 自 走 棋</div>
+    <h1>星视寰宇自走棋</h1>
+    <p class="sub">4 大势力 · <b>32 艘舰船</b> · 武器 / 防御 / 后勤 三系羁绊</p>
+    <p class="sub" style="margin-top:10px;font-size:13px">买船、合成、摆阵，然后看着你的舰队打出去</p>
+    <div class="rule"></div>
+  </section>
+
+  <section class="dl">
+    <a class="btn win"
+       href="https://gh-proxy.com/https://github.com/xshynews/EVE-AutoChess/releases/download/v0.14.10/EVE-AutoChess-V0.14.10.exe"
+       rel="noopener">
+      <svg viewBox="0 0 24 24"><path d="M3 5.5 10.2 4.5v7.1H3V5.5Zm0 13 7.2 1v-7H3v6Zm8.2 1.2L21.5 21V12.6h-10.3v7.1Zm0-15.4v7.1h10.3V3l-10.3 1.3Z"/></svg>
+      <span class="t">
+        <span class="t1">Windows 下载</span>
+        <span class="t2">单文件 · 解压即玩 · 无需安装</span>
+      </span>
+      <span class="sz">410 MB</span>
+    </a>
+
+    <a class="btn apk"
+       href="https://gh-proxy.com/https://github.com/xshynews/EVE-AutoChess/releases/download/v0.14.10/EVE-AutoChess-V0.14.10.apk"
+       rel="noopener">
+      <svg viewBox="0 0 24 24"><path d="M6 9h12v9a2 2 0 0 1-2 2h-1v2.5h-2V20h-2v2.5H9V20H8a2 2 0 0 1-2-2V9Zm-3 .5a1.6 1.6 0 0 1 3.2 0v6a1.6 1.6 0 0 1-3.2 0v-6Zm14.8 0a1.6 1.6 0 0 1 3.2 0v6a1.6 1.6 0 0 1-3.2 0v-6ZM8.2 8a5 5 0 0 1 7.6 0H8.2Z"/></svg>
+      <span class="t">
+        <span class="t1">Android 下载</span>
+        <span class="t2">arm64 · Android 8.0 以上</span>
+      </span>
+      <span class="sz">195 MB</span>
+    </a>
+  </section>
+
+  <p class="note">
+    整包版本 <span class="hi" id="pkgVer">v0.14.10</span> ·
+    启动后自动热更到最新（增量补丁约 1 MB，校验通过才应用）<br />
+    下载走 GitHub 加速节点，若失败请稍后重试或到群里要直链
+  </p>
+
+  <section class="cards">
+    <div class="card">
+      <div class="k">自动更新</div>
+      <div class="v">启动时检查版本，只下 <em>1 MB 左右</em>的增量补丁，脚本与数值改动能即时生效，坏包自动回退。</div>
+    </div>
+    <div class="card">
+      <div class="k">单机游玩</div>
+      <div class="v">不需要联网对战，也不需要登录账号。<em>断网也能打</em>，局内没有广告和内购。</div>
+    </div>
+    <div class="card">
+      <div class="k">存档在本地</div>
+      <div class="v">进度只存在你自己的机器上，<em>不上传服务器</em>。卸载前记得备份存档目录。</div>
+    </div>
+  </section>
+
+  <section class="join">
+    <div class="h">遇到问题 / 想看更新进度</div>
+    <div class="q">461924852</div>
+    <div class="s">QQ 群 · 版本、bug、建议都在这里</div>
+  </section>
+
+  <footer>
+    <span>星视寰宇自走棋 · 同人作品，与 CCP Games / 网易无关</span>
+    <span id="footVer">0.14.10</span>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  /* ── 星空：慢速漂移 + 轻微视差 ── */
+  var cv = document.getElementById('stars');
+  var ctx = cv.getContext('2d');
+  var W = 0, H = 0, stars = [], mouseX = 0, mouseY = 0;
+
+  function resize() {
+    W = cv.width = window.innerWidth;
+    H = cv.height = window.innerHeight;
+    var n = Math.min(Math.floor(W * H / 9000), 220);
+    stars = [];
+    for (var i = 0; i < n; i++) {
+      var depth = Math.random();
+      stars.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        s: depth < 0.86 ? 1 : 2,
+        v: 0.012 + depth * 0.05,
+        a: 0.18 + Math.random() * 0.55,
+        ph: Math.random() * 6.283,
+        d: 0.2 + depth * 0.8
+      });
+    }
+  }
+
+  function draw(t) {
+    ctx.fillStyle = '#070B12';
+    ctx.fillRect(0, 0, W, H);
+
+    // 极淡的星云底
+    var g = ctx.createRadialGradient(W * 0.72, H * 0.18, 0, W * 0.72, H * 0.18, Math.max(W, H) * 0.62);
+    g.addColorStop(0, 'rgba(41,173,255,0.055)');
+    g.addColorStop(1, 'rgba(41,173,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    var g2 = ctx.createRadialGradient(W * 0.16, H * 0.82, 0, W * 0.16, H * 0.82, Math.max(W, H) * 0.5);
+    g2.addColorStop(0, 'rgba(245,192,66,0.035)');
+    g2.addColorStop(1, 'rgba(245,192,66,0)');
+    ctx.fillStyle = g2;
+    ctx.fillRect(0, 0, W, H);
+
+    for (var i = 0; i < stars.length; i++) {
+      var st = stars[i];
+      st.y += st.v;
+      if (st.y > H) { st.y = -2; st.x = Math.random() * W; }
+      var tw = 0.65 + 0.35 * Math.sin(t * 0.0011 + st.ph);
+      var ox = (mouseX * st.d) * 6;
+      var oy = (mouseY * st.d) * 6;
+      ctx.fillStyle = 'rgba(214,235,255,' + (st.a * tw) + ')';
+      ctx.fillRect(st.x + ox, st.y + oy, st.s, st.s);
+    }
+    requestAnimationFrame(draw);
+  }
+
+  window.addEventListener('resize', resize);
+  window.addEventListener('mousemove', function (e) {
+    mouseX = (e.clientX / window.innerWidth) - 0.5;
+    mouseY = (e.clientY / window.innerHeight) - 0.5;
+  }, { passive: true });
+
+  resize();
+  requestAnimationFrame(draw);
+
+  /* ── 版本号：读热更清单，失败就用静态值 ── */
+  fetch('/update/version.json', { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      if (!d || !d.version) return;
+      var tag = document.getElementById('verTag');
+      var foot = document.getElementById('footVer');
+      if (tag) tag.textContent = 'v' + d.version;
+      if (foot) foot.textContent = d.version + ' · code ' + d.code;
+    })
+    .catch(function () { /* 保持静态文案，不报错 */ });
+})();
+</script>
+</body>
+</html>
