@@ -258,6 +258,8 @@ var _layer_seen: Dictionary = {}
 var _last_roster_sig := ""
 ## 上一次打过的「生效羁绊」组合 —— 只在变化时打日志
 var _last_synergy_sig := ""
+## Web 试玩：初始舰队是否已经发放过（只发一次，后续回合不重复送）。
+var _web_starter_done := false
 ## 正在重建舰队（begin_prep 期间）—— 这期间不要再被 changed 信号触发一次重建
 ## 正在重建舰队 / 装载面板 —— 这期间 `_refresh_run_ui` 不要再重建一次。
 ## ★ 2026-10-10（2⑦）：真值搬进 `_prep_phase`，这里透传（事件节点也读写它）。
@@ -622,6 +624,41 @@ func _ready() -> void:
 #  阶段一：准备
 # ══════════════════════════════════════════════════════════════════
 
+## Web 试玩版：开局送 3 艘船并直接摆上棋盘（**只在网页包、只发一次**）。
+##
+## [WHY] 网页试玩没有新手引导。玩家抓开页面看到空棋盘、空备战席，
+##       点「开战」只会得到一句「场上一艘船都没有」，然后关掉页面。
+##       送一支能直接开打的最小舰队，「打开网页 → 半分钟内看见战斗」才成立。
+## [NOTE] 判据是 `web` 功能标签 ⇒ 桌面 / 安卓照旧从零开始，数值平衡一点不动。
+## [PITFALL] 必须落在 `begin_prep()` 里 `_build_own_fleet()` **之前** ——
+##       舰队是每回合从 `run.field` 现搭的，晚一步这一回合仍然是空的。
+func _seed_web_starter_fleet() -> void:
+	if _web_starter_done or not OS.has_feature("web"):
+		return
+	_web_starter_done = true
+	if run == null or not run.field.is_empty():
+		return
+	# 兜底补星币到能买 3 艘 1 费船。⛔ 不多送：星币是玩法资源，白给会毁掉前几回合的决策。
+	run.coin = maxi(run.coin, 6)
+	# 我方部署区 = 棋盘下 4 行（`EveRunState._cell_ok`：row 7..10）。
+	# 取第 9 行三格，站位正对敌方，开战运镜里也在画面内。
+	var cells: Array[Vector2i] = [Vector2i(9, 3), Vector2i(9, 5), Vector2i(9, 7)]
+	var placed := 0
+	for i in run.offers.size():
+		if placed >= cells.size():
+			break
+		var offer = run.offers[i]
+		if offer == null or not (offer is Dictionary) or (offer as Dictionary).is_empty():
+			continue
+		if not bool(run.buy(i).get("ok", false)):
+			continue
+		# `buy()` 把船塞进备战席末尾，紧接着就上阵。
+		var r := run.deploy_from_bench(run.bench.size() - 1, cells[placed].x, cells[placed].y)
+		if bool(r.get("ok", false)):
+			placed += 1
+	print("[web] 初始舰队已上阵 %d 艘（星币 %d）" % [placed, run.coin])
+
+
 ## 进入准备阶段：清场 → 造双方舰队 → 摆位 → 刷 HUD → 起倒计时
 ##
 ## ⚠️ 这里【不建模拟器】。准备阶段不该有战斗推进 ——
@@ -679,6 +716,7 @@ func begin_prep() -> void:
 	arena.fx_clear()
 
 	arena.clear_ships()
+	_seed_web_starter_fleet()
 	_own_ships = _build_own_fleet()
 	_enemy_ships = _build_enemy_fleet()
 

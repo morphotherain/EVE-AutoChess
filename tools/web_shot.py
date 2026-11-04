@@ -23,7 +23,12 @@ OUT = sys.argv[2]
 WAIT = float(sys.argv[3]) if len(sys.argv) > 3 else 12.0
 W = int(sys.argv[4]) if len(sys.argv) > 4 else 1280
 H = int(sys.argv[5]) if len(sys.argv) > 5 else 800
-# 可选：第 6 个参数 "x,y"（CSS 像素）表示加载完先点一下，再等 6 秒截图
+# 可选：第 6 个参数
+#   "x,y"        —— 加载完在 (x,y) 点一下（CSS 像素）
+#   "key:Enter"  —— 加载完敲一下这个键
+#   "keydown:Down,Down,Enter" —— 依次敲多个键（菜单键盘导航用）
+# [WHY] Godot 的 canvas 对 CDP 合成鼠标常收不到（见下文 inject 注释），
+#       而主菜单本来就支持键盘（上下切模式 / 回车开始）⇒ 键盘更可靠。
 CLICK = sys.argv[6] if len(sys.argv) > 6 else ""
 AFTER = float(sys.argv[7]) if len(sys.argv) > 7 else 6.0
 
@@ -151,31 +156,78 @@ def main():
 
     ws.s.settimeout(30)
 
-    if CLICK:
-        cx, cy = [float(v) for v in CLICK.split(",")]
-        for t in ("mouseMoved", "mousePressed", "mouseReleased"):
-            call("Input.dispatchMouseEvent", {
-                "type": t, "x": cx, "y": cy, "button": "left",
-                "clickCount": 1, "buttons": 1 if t == "mousePressed" else 0,
-            })
-        # [WHY] CDP 的合成鼠标事件不一定能喂到 Godot 的 canvas 监听上，
-        #       再直接往 canvas 派发一轮 pointer 事件兜底。
-        js = """
-        (function(){
-          var c = document.querySelector('canvas'); if(!c) return 'no canvas';
-          var r = c.getBoundingClientRect();
-          var x = r.left + %f * r.width / %f, y = r.top + %f * r.height / %f;
-          ['pointermove','pointerdown','pointerup'].forEach(function(t){
-            c.dispatchEvent(new PointerEvent(t,{clientX:x,clientY:y,bubbles:true,
-              cancelable:true,button:0,buttons:t==='pointerdown'?1:0,
-              pointerType:'mouse',isPrimary:true,pointerId:1}));
-          });
-          return 'ok';
-        })()
-        """ % (cx, W, cy, H)
-        r = call("Runtime.evaluate", {"expression": js, "returnByValue": True})
-        print("canvas 注入:", r.get("result", {}).get("value"))
-        print(f"已点击 ({cx},{cy})，再等 {AFTER}s")
+    if CLICK.startswith("key"):
+        seq = CLICK.split(":", 1)[1] if ":" in CLICK else "Enter"
+        KEYMAP = {
+            "Enter": (13, "Enter", "\r"),
+            "Space": (32, "Space", " "),
+            "Up": (38, "ArrowUp", ""),
+            "Down": (40, "ArrowDown", ""),
+            "Left": (37, "ArrowLeft", ""),
+            "Right": (39, "ArrowRight", ""),
+            "Escape": (27, "Escape", ""),
+        }
+        for k in [s.strip() for s in seq.split(",") if s.strip()]:
+            vk, code, text = KEYMAP.get(k, (13, "Enter", "\r"))
+            base = {"key": code if k != "Space" else " ", "code": code,
+                    "windowsVirtualKeyCode": vk, "nativeVirtualKeyCode": vk}
+            # rawKeyDown → char（有可打印字符才发）→ keyUp，这是 CDP 的标准三连
+            call("Input.dispatchKeyEvent", dict(base, type="rawKeyDown"))
+            if text:
+                call("Input.dispatchKeyEvent", dict(base, type="char", text=text,
+                                                    unmodifiedText=text))
+            call("Input.dispatchKeyEvent", dict(base, type="keyUp"))
+            # [WHY] CDP 的合成键要求页面有焦点，无头窗口里常拿不到 ⇒
+            #       再往 canvas 直接派发一轮 KeyboardEvent 兜底（Godot 的监听挂在 canvas 上）。
+            js = """
+            (function(){
+              var c=document.getElementById('canvas')||document.querySelector('canvas');
+              if(!c) return 'no canvas';
+              try{ c.focus(); }catch(e){}
+              var o={key:%s,code:%s,keyCode:%d,which:%d,bubbles:true,cancelable:true};
+              c.dispatchEvent(new KeyboardEvent('keydown',o));
+              c.dispatchEvent(new KeyboardEvent('keyup',o));
+              return 'ok';
+            })()
+            """ % (json.dumps(" " if k == "Space" else code), json.dumps(code), vk, vk)
+            r = call("Runtime.evaluate", {"expression": js, "returnByValue": True})
+            print("已按键", k, "canvas 兜底:", r.get("result", {}).get("value"))
+            time.sleep(0.35)
+        print(f"按键完成，再等 {AFTER}s")
+        time.sleep(AFTER)
+    elif CLICK:
+        # 支持 "x,y" 或 "x,y;x2,y2;..." 多点连点（每点之间隔 0.8s 让 UI 反应）
+        pts = [p for p in CLICK.split(";") if p.strip()]
+        for pt in pts:
+            cx, cy = [float(v) for v in pt.split(",")]
+            for t in ("mouseMoved", "mousePressed", "mouseReleased"):
+                call("Input.dispatchMouseEvent", {
+                    "type": t, "x": cx, "y": cy, "button": "left",
+                    "clickCount": 1, "buttons": 1 if t == "mousePressed" else 0,
+                })
+            # [WHY] CDP 的合成鼠标事件不一定能喂到 Godot 的 canvas 监听上，
+            #       再直接往 canvas 派发一轮 pointer 事件兜底。
+            # ⚠️ 坐标直接用 CSS 像素 + canvas 的 rect 原点，**不做 W/H 换算**：
+            #    canvas 的实际宽度未必等于 --window-size（实测 1280 的窗口
+            #    内容区只有 1094）⇒ 按 W 换算会把这几十像素整体缩偏，
+            #    表现是「点按钮没反应、点卡片旁边却选中了」。
+            js = """
+            (function(){
+              var c = document.querySelector('canvas'); if(!c) return 'no canvas';
+              var r = c.getBoundingClientRect();
+              var x = r.left + %f, y = r.top + %f;
+              ['pointermove','pointerdown','pointerup'].forEach(function(t){
+                c.dispatchEvent(new PointerEvent(t,{clientX:x,clientY:y,bubbles:true,
+                  cancelable:true,button:0,buttons:t==='pointerdown'?1:0,
+                  pointerType:'mouse',isPrimary:true,pointerId:1}));
+              });
+              return 'ok';
+            })()
+            """ % (cx, cy)
+            r = call("Runtime.evaluate", {"expression": js, "returnByValue": True})
+            print(f"已点击 ({cx},{cy}) canvas 注入:", r.get("result", {}).get("value"))
+            time.sleep(0.8)
+        print(f"点击完毕，再等 {AFTER}s")
         time.sleep(AFTER)
 
     shot = call("Page.captureScreenshot", {"format": "png"})

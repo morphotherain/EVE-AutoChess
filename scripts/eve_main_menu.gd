@@ -1701,8 +1701,11 @@ func target_scene_for_start() -> String:
 			return DOUDIZHU_SCENE
 		return ""
 	var tier_id := String(cards[sel].get("id", ""))
+	# ★ Web 试玩版**不播开场**：那段是 13 MB 的视频 + 一整套逐句演出，
+	#   网页首屏等不起，而且玩家从落地页点「试玩」的期待就是直接开打。
+	#   ⇒ `web` 下 `first_time` 恒 false，直接进战场。
 	var first_time := (mode_id == FIRST_MODE_ID and tier_id == FIRST_TIER_ID
-			and not PROGRESS.intro_seen())
+			and not PROGRESS.intro_seen() and not OS.has_feature("web"))
 	return INTRO_SCENE if first_time else BATTLE_SCENE
 
 
