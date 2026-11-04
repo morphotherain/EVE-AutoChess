@@ -31,6 +31,19 @@ sed -i '/^MCPRuntimeProbe=/d' "$ROOT/project.godot"
 mkdir -p "$OUT"
 "$GODOT" --headless --path "$ROOT" --export-release "Web" "build/web/index.html"
 
+# 给试玩页左上角加一个回落地页的入口。
+#
+# [WHY] Godot 每导一次就用模板覆盖 index.html，所以只能放在构建脚本里注入，
+#       改导出产物本身会被下次导出冲掉。
+# [NOTE] 用 HTML 实体写「返回」（&#36820;&#22238;），源码保持纯 ASCII ——
+#       Git Bash 的 sed 碰到 UTF-8 中文在部分 locale 下会写坏字节。
+# ⚠️⚠️ sed **替换串**里的 `&` 表示「整个匹配」，必须转义成 `\&`。
+#       不转义的后果不是报错，而是把每个 `&` 换成 `</body>`，页面结构直接烂掉
+#       （2026-11-04 第一次注入就是这么炸的，产物里全是 `</body>#8592;`）。
+RETURN_LINK='<a href="/" style="position:fixed;left:14px;top:12px;z-index:9;padding:7px 14px;border-radius:999px;background:rgba(10,18,30,.66);border:1px solid rgba(120,160,220,.32);color:#BFD3EF;font:13px/1.2 system-ui,-apple-system,sans-serif;text-decoration:none;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)">&#8592; &#36820;&#22238;</a>'
+RETURN_LINK_ESC=${RETURN_LINK//&/\\&}
+sed -i "s|</body>|$RETURN_LINK_ESC</body>|" "$OUT/index.html"
+
 # [WHY] Caddy 开了 precompressed gzip：有 index.wasm.gz 就直接吐压缩版，
 #       38MB → 9.7MB，4Mbps 的机器上首屏能少等半分钟。
 gzip -9 -c "$OUT/index.wasm" > "$OUT/index.wasm.gz"

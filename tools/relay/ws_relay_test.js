@@ -11,19 +11,24 @@
 // 用法：node ws_relay_test.js [port]      （默认连 127.0.0.1:27101）
 
 const net = require('net');
+const tls = require('tls');
 const crypto = require('crypto');
 
+// 用法：node ws_relay_test.js [port] [host] [ws|wss]
 const PORT = parseInt(process.argv[2] || '27101', 10);
-const HOST = '127.0.0.1';
+const HOST = process.argv[3] || '127.0.0.1';
+const TLS = (process.argv[4] || 'ws') === 'wss';
 const ROOM = 'TESTROOM';
 
 function connect() {
   return new Promise((resolve, reject) => {
-    const sock = net.connect(PORT, HOST);
+    const sock = TLS
+      ? tls.connect({ host: HOST, port: PORT, servername: HOST })
+      : net.connect(PORT, HOST);
     const key = crypto.randomBytes(16).toString('base64');
-    sock.on('connect', () => {
+    sock.on(TLS ? 'secureConnect' : 'connect', () => {
       sock.write(
-        `GET /relay HTTP/1.1\r\nHost: ${HOST}:${PORT}\r\n` +
+        `GET /relay HTTP/1.1\r\nHost: ${HOST}\r\n` +
         'Upgrade: websocket\r\nConnection: Upgrade\r\n' +
         `Sec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\n\r\n`);
     });
@@ -47,8 +52,8 @@ function connect() {
         buf = r;
       }
     });
-    sock.on('error', (e) => { console.log('[dbg] sock error:', e.message); reject(e); });
-    sock.on('close', () => { c.closed = true; console.log('[dbg] sock closed'); });
+    sock.on('error', reject);
+    sock.on('close', () => { c.closed = true; });
   });
 }
 
@@ -141,7 +146,6 @@ function check(name, cond, extra = '') {
     `g1=${JSON.stringify(b1)} g2=${JSON.stringify(b2)}`);
 
   // ⑥ 加入者断开
-  console.log('[dbg] destroying g2; host.closed=', host.closed, ' g1.closed=', g1.closed);
   // 用 close 帧断开（浏览器关标签页就是这个行为），比 RST 更接近真实
   send(g2, Buffer.from([0x03, 0xe8]), 0x8);
   setTimeout(() => { try { g2.sock.destroy(); } catch (e) {} }, 50);
