@@ -46,11 +46,14 @@ echo "[build_web_pve] ① 压缩舰船贴图…"
 # [NOTE] `all_resources` + 黑名单：之前用纯白名单漏了 assets/vfx，
 #       导致 `eve_shield_impact.gd` 的 preload 失败、整条编译链崩掉。
 #       黑名单只会「少带资源」，不会「带到不存在的路径」。
+# ⚠️ `build/*` 必须排掉：调试截图（web_shot.py 的产物）会被 `--import`
+#    当成资源生成 .import，然后 all_resources 把它们一起打进 pck。
+#    实测混进 1 MB 无关截图，且每次截图都改包体 ⇒ 只会在发布时才发现。
 "$PY" "$ROOT/tools/probe_web_preset.py" apply \
 	'scripts/*, data/*' \
 	'"res://scenes/battle_scene.tscn", "res://scenes/main_menu.tscn"' \
 	'all_resources' \
-	'assets/audio_candidates/*, assets/video/*, assets/beacon/*, disk-cleaner/*, tools/*, assets/cards/*, assets/audio/music/battle_02.ogg, assets/audio/music/border_01.ogg, assets/audio/music/border_final_01.ogg, assets/audio/music/ddz_01.ogg, assets/audio/music/lantern_01.ogg, assets/audio/music/prep_02.ogg'
+	'assets/audio_candidates/*, assets/video/*, assets/beacon/*, disk-cleaner/*, tools/*, build/*, assets/cards/*, assets/audio/music/battle_02.ogg, assets/audio/music/border_01.ogg, assets/audio/music/border_final_01.ogg, assets/audio/music/ddz_01.ogg, assets/audio/music/lantern_01.ogg, assets/audio/music/prep_02.ogg'
 
 # ── ② 主场景换成本场景 ─────────────────────────────────────────
 # ⚠️ 备份必须在 sed **之前** —— 备份到的是「改完主场景」的版本的话，

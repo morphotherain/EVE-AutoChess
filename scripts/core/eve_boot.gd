@@ -35,11 +35,38 @@ func _apply_web_font() -> void:
 	if not (f is Font):
 		push_warning("[EveBoot] 网页版字体加载失败：" + WEB_FONT)
 		return
-	# [NOTE] 光设 ThemeDB.fallback_font 覆盖不全（大量控件走主题查找），
-	#        必须再给根窗口挂一个带 default_font 的 Theme，Control 才继承得到。
+
+	# ★★ 2026-11-04 修正：只挂 `Theme.default_font` **不够**，会漏掉绝大多数控件。
+	#
+	# [WHY] 实测证据（网页版战斗场景，打了 [web-diag] 打印每个 Label 的解析结果）：
+	#         自己 new 的 Label      → font = Noto Sans SC      ← 走 root.theme.default_font
+	#         HUD 里真实存在的 Label → font = Open Sans SemiBold ← 内置默认主题！
+	#       两者在同一棵树下，差别只在**内置默认主题里定义了 `Label/fonts/font`**。
+	#       Godot 的查找顺序是「override → 自身上级 theme 链 → 内置默认主题 → fallback」，
+	#       而 `Theme.default_font` 只在**该类型整条链都没定义 font 时**才顶上。
+	#       ⇒ 内置主题里那套 Open Sans 永远先命中，中文自然是 notdef 方块。
+	# [PITFALL] 主菜单看着没问题，是因为它那批控件确实没被内置主题命中 ——
+	#       别拿"主菜单正常"当字体没问题的证据，这次就是这么被骗过去的。
+	#
+	# 修法：**逐个类型**把内置默认主题的 font 项换成中文子集。
+	#       这是唯一能一次覆盖 Label/Button/RichTextLabel/… 全部控件，
+	#       且不需要在 88 处调用点逐个塞字体的办法。
 	ThemeDB.fallback_font = f
+	var dt := ThemeDB.get_default_theme()
+	if dt != null:
+		dt.default_font = f
+		for ty in dt.get_type_list():
+			if dt.has_font("font", ty):
+				dt.set_font("font", ty, f)
+
+	# 保险：再给根窗口挂一份（覆盖那些绕过默认主题、直接读 root.theme 的路径）
 	var t := Theme.new()
 	t.default_font = f
+	for ty2 in ["Label", "Button", "RichTextLabel", "LineEdit", "TextEdit",
+			"PopupMenu", "TooltipLabel", "ItemList", "Tree", "OptionButton",
+			"CheckBox", "CheckButton", "LinkButton", "ProgressBar", "SpinBox",
+			"TabBar", "TabContainer", "MenuBar", "CodeEdit"]:
+		t.set_font("font", ty2, f)
 	var tree := get_tree()
 	if tree != null and tree.root != null:
 		tree.root.theme = t
