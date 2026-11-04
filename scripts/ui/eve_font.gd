@@ -56,11 +56,17 @@ const META := "_eve_font_base"
 ## 为什么不往仓库塞字体文件：中文字体动辄十几 MB，且微软雅黑/思源黑体的分发授权要另说。
 ## SystemFont 走**系统已装字体**（Windows 微软雅黑 / 安卓 Noto Sans CJK），权重 700 = 粗体，
 ## 不增加包体、也不用管授权；代价是各机型字形略有差异（可接受，正文没变，只是更实）。
-static var _heavy: SystemFont = null
+static var _heavy: Font = null
 
 
 static func heavy() -> Font:
 	if _heavy == null:
+		# [WHY] 网页版没有系统字体，必须用随包分发的子集字体（见 eve_boot.gd）
+		if OS.has_feature("web"):
+			var wf := load("res://assets/fonts/NotoSansSC-Bold.ttf")
+			if wf is Font:
+				_heavy = wf
+				return _heavy
 		var f := SystemFont.new()
 		f.font_names = PackedStringArray([
 			"Microsoft YaHei UI", "Microsoft YaHei", "SimHei",

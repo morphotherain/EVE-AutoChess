@@ -17,10 +17,41 @@ func _init() -> void:
 	T.apply_saved()
 
 
+## ★ 2026-11-04 网页版字体。
+## [WHY] 浏览器里没有"系统已装字体"这回事，`SystemFont` 会退化到引擎自带
+##       默认字体（无中文字形）⇒ 整站中文变乱码。这里把随包分发的
+##       Noto Sans SC 子集（OFL 授权，按工程实际用字裁剪过）设为全局兜底。
+## [NOTE] 只在 web 生效，桌面/安卓仍走系统字体，出图基线不受影响。
+## [PITFALL] 不能放在 `_init()`：那时节点还没进树，`get_tree()` 直接报
+##       `Parameter "data.tree" is null`，主题挂不上去（实测白干一轮）。
+const WEB_FONT := "res://assets/fonts/NotoSansSC-Regular.ttf"
+
+
+func _apply_web_font() -> void:
+	if not ResourceLoader.exists(WEB_FONT):
+		push_warning("[EveBoot] 网页版字体缺失：" + WEB_FONT)
+		return
+	var f := load(WEB_FONT)
+	if not (f is Font):
+		push_warning("[EveBoot] 网页版字体加载失败：" + WEB_FONT)
+		return
+	# [NOTE] 光设 ThemeDB.fallback_font 覆盖不全（大量控件走主题查找），
+	#        必须再给根窗口挂一个带 default_font 的 Theme，Control 才继承得到。
+	ThemeDB.fallback_font = f
+	var t := Theme.new()
+	t.default_font = f
+	var tree := get_tree()
+	if tree != null and tree.root != null:
+		tree.root.theme = t
+	print("[EveBoot] 网页版字体已接管：", f.get_font_name())
+
+
 ## ★ 2026-10-18：真机指标回传。
 ##   等两帧再采集 —— `_init()` 时根窗口还没完成尺寸/缩放初始化，那时读到的
 ##   `viewport_logical` 是默认值，不是真机实际值（会误导后续布局）。
 func _ready() -> void:
+	if OS.has_feature("web"):
+		_apply_web_font()
 	if not OS.has_feature("mobile"):
 		return
 	await get_tree().process_frame

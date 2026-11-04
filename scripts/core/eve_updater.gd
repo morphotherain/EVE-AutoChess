@@ -67,6 +67,11 @@ func _init() -> void:
 
 
 func _ready() -> void:
+	# [WHY] 网页版的包是站点直接分发的，不存在"本地热更"这回事；
+	#       而且跨域拉 49.233.138.141 会被 CORS 拦掉，刷一堆报错还白等两帧。
+	if OS.has_feature("web"):
+		set_process(false)
+		return
 	# 联网检查放两帧之后：让主菜单先把画面铺出来，别让启动像卡住。
 	await get_tree().process_frame
 	await get_tree().process_frame

@@ -31,7 +31,11 @@
 	respond @bad "method not allowed" 405
 
 	# 2) 目录浏览关掉（原来 browse 会把 /update/pck/ 下列表直接吐出去）
-	file_server
+	#    precompressed gzip：有 `<文件>.gz` 时直接吐压缩版（网页版 wasm 38MB → 9.7MB），
+	#    省 CPU 也不额外占带宽；没 .gz 的文件照常原样发。
+	file_server {
+		precompressed gzip
+	}
 
 	# 3) 缓存策略：清单不缓存（要能立刻感知新版本），包长缓存（文件名带版本号）
 	@meta path /update/version.json
