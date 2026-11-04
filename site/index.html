@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>星视寰宇自走棋 · 下载</title>
-<meta name="description" content="EVE 题材回合制舰队自走棋。32 艘舰船、4 大势力、装备与羁绊。Windows / Android 免费下载。" />
+<meta name="description" content="EVE 题材回合制舰队自走棋。52 艘舰船、4 大势力、装备与羁绊。Windows / Android 免费下载。" />
 <meta name="theme-color" content="#070B12" />
 <style>
   :root{
@@ -57,11 +57,7 @@
   }
 
   /* ── Hero ── */
-  .hero{padding:76px 0 0;text-align:center}
-  .kicker{
-    font-size:12px;letter-spacing:.42em;color:var(--gold);
-    text-indent:.42em;margin-bottom:22px;
-  }
+  .hero{padding:96px 0 0;text-align:center}
   h1{
     font-size:clamp(38px,7vw,76px);
     line-height:1.04;
@@ -73,11 +69,6 @@
     color:transparent;
     filter:drop-shadow(0 0 26px rgba(41,173,255,.28));
   }
-  .sub{
-    margin-top:26px;font-size:clamp(14px,1.6vw,17px);
-    color:var(--dim);letter-spacing:.1em;
-  }
-  .sub b{color:var(--text);font-weight:600}
   .rule{
     width:min(460px,72%);height:1px;margin:34px auto 0;
     background:linear-gradient(90deg,transparent,var(--cyan),transparent);
@@ -121,12 +112,6 @@
     color:var(--dim);white-space:nowrap;
   }
 
-  .note{
-    margin:18px auto 0;max-width:760px;
-    font-size:12px;color:var(--dim);letter-spacing:.05em;text-align:center;line-height:1.9;
-  }
-  .note .hi{color:var(--cyan)}
-
   /* ── 信息卡 ── */
   .cards{
     display:grid;grid-template-columns:repeat(3,1fr);gap:14px;
@@ -159,8 +144,34 @@
     font-family:ui-monospace,Consolas,monospace;
     font-size:clamp(24px,4vw,34px);letter-spacing:.12em;
     color:var(--cyan);text-shadow:0 0 24px rgba(41,173,255,.4);
+    text-decoration:none;cursor:pointer;
+    padding:2px 6px;
+    border-bottom:1px solid rgba(41,173,255,.26);
+    transition:color .18s,border-color .18s,text-shadow .25s;
+  }
+  .join .q:hover{
+    color:#7FCBFF;border-bottom-color:var(--cyan);
+    text-shadow:0 0 30px rgba(41,173,255,.72);
+  }
+  .join .q:active{transform:translateY(1px)}
+  .join .q:focus-visible{outline:1px solid var(--cyan);outline-offset:4px}
+  .join .q.copied{
+    color:var(--gold);border-bottom-color:rgba(245,192,66,.5);
+    text-shadow:0 0 26px rgba(245,192,66,.45);
   }
   .join .s{margin-top:12px;font-size:12px;color:var(--dim);letter-spacing:.08em}
+
+  /* ── 复制提示条 ── */
+  .toast{
+    position:fixed;left:50%;bottom:34px;transform:translate(-50%,14px);
+    padding:11px 20px;border:1px solid var(--line);
+    background:rgba(16,26,40,.96);
+    color:var(--text);font-size:13px;letter-spacing:.06em;white-space:nowrap;
+    opacity:0;pointer-events:none;z-index:9;
+    transition:opacity .22s,transform .22s;
+  }
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+  .toast b{color:var(--cyan);font-family:ui-monospace,Consolas,monospace;letter-spacing:.1em}
 
   footer{
     margin:56px 0 0;padding-top:26px;
@@ -193,10 +204,7 @@
   </div>
 
   <section class="hero">
-    <div class="kicker">E V E &nbsp;·&nbsp; 舰 队 自 走 棋</div>
     <h1>星视寰宇自走棋</h1>
-    <p class="sub">4 大势力 · <b>52 艘舰船</b> · 派系 / 武器 / 防御 / 后勤 四系羁绊</p>
-    <p class="sub" style="margin-top:10px;font-size:13px">买船、合成、摆阵，然后看着你的舰队打出去</p>
     <div class="rule"></div>
   </section>
 
@@ -224,12 +232,6 @@
     </a>
   </section>
 
-  <p class="note">
-    整包版本 <span class="hi" id="pkgVer">v0.14.10</span> ·
-    启动后自动热更到最新（增量补丁约 1 MB，校验通过才应用）<br />
-    下载走 GitHub 加速节点，若失败请稍后重试或到群里要直链
-  </p>
-
   <section class="cards">
     <div class="card">
       <div class="k">自动更新</div>
@@ -247,8 +249,10 @@
 
   <section class="join">
     <div class="h">遇到问题 / 想看更新进度</div>
-    <div class="q">461924852</div>
-    <div class="s">QQ 群 · 版本、bug、建议都在这里</div>
+    <a class="q" id="qqGroup"
+       href="https://qun.qq.com/universal-share/share?ac=1&amp;authKey=IXfLS%2F9pqsq32vKuaXA20XvcdTP14e0DG0wtNLBVWkb8wnjPxYqsajXLe5sduSIY&amp;busi_data=eyJncm91cENvZGUiOiI0NjE5MjQ4NTIiLCJ0b2tlbiI6IkNPSG80ek03NG95MGs3YkU5dkdtZFF3clc5cEpNZDJmUEZrZUFaQ1M3bGdERjM2TGUzRzB3VzJGdjR0ZWVKbVoiLCJ1aW4iOiI2OTUzMDUyODIifQ%3D%3D&amp;data=_xsINqiGqykxVQPrM1iXucqeiXhp0TwOZGhriW2iCdYrwVL6dEyykd-Fm0xNUzHyd8FTrRXXtTd6YSh1R6gx8Q&amp;svctype=4&amp;tempid=h5_group_info"
+       rel="noopener">461924852</a>
+    <div class="s">点击自动加群，再次点击复制群号</div>
   </section>
 
   <footer>
@@ -257,6 +261,8 @@
   </footer>
 
 </div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 (function () {
@@ -334,6 +340,104 @@
       if (foot) foot.textContent = d.version + ' · code ' + d.code;
     })
     .catch(function () { /* 保持静态文案，不报错 */ });
+
+  /* ── QQ 群：首次点击跳转加群，返回后再点则复制群号 ──
+     [WHY] 没有 HTTPS，navigator.clipboard 不可用（需安全上下文），
+           所以必须带 textarea + execCommand 的降级分支。         */
+  var GROUP_NO = '461924852';
+  var qqLink = document.getElementById('qqGroup');
+  var toastEl = document.getElementById('toast');
+  var toastTimer = null;
+  // jumped=true 表示「这一次访问里已经点过链接跳过」
+  var jumped = false;
+  // 会话标记：点出去时打上，用来区分「真的从 QQ 页退回来」和「从别的站前进回来」
+  var MKEY = 'eve_qq_left';
+  function markLeft(on) {
+    try { on ? sessionStorage.setItem(MKEY, '1') : sessionStorage.removeItem(MKEY); } catch (e) {}
+  }
+  function hasLeft() {
+    try { return sessionStorage.getItem(MKEY) === '1'; } catch (e) { return false; }
+  }
+
+  /* 判断本次载入是不是「从别的页面退回来」的。
+     [WHY] bfcache 恢复时 JS 变量还在，但整页重载后退回时变量会清零，
+           只能靠 navigation type == back_forward 补判；
+           再加会话标记，避免从别的站「前进」回来被误判。      */
+  (function detectReturn() {
+    try {
+      var navs = performance.getEntriesByType && performance.getEntriesByType('navigation');
+      var t = navs && navs[0] ? navs[0].type : '';
+      if (t === 'back_forward') { jumped = hasLeft(); return; }
+      if (t === 'navigate' || t === 'reload') { markLeft(false); return; } // 刷新 = 重置
+      // 老浏览器兜底：performance.navigation.type，2 = back_forward
+      if (performance.navigation && performance.navigation.type === 2) jumped = hasLeft();
+    } catch (e) { /* 拿不到就按首次访问处理 */ }
+  })();
+
+  // bfcache 恢复（webkit 有时会重新派发 pageshow）
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) jumped = hasLeft();
+  });
+
+  function showToast(html) {
+    if (!toastEl) return;
+    toastEl.innerHTML = html;
+    toastEl.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('on'); }, 2400);
+  }
+
+  function copyText(txt) {
+    // execCommand 降级分支：[WHY] http 页面没有 navigator.clipboard，
+    // 且 clipboard 被浏览器拒绝时也要能复制，所以一律再兜一层。
+    function fallback() {
+      return new Promise(function (resolve, reject) {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = txt;
+          ta.setAttribute('readonly', '');
+          ta.style.cssText = 'position:fixed;top:-999px;left:-999px;opacity:0';
+          document.body.appendChild(ta);
+          ta.select();
+          ta.setSelectionRange(0, txt.length);
+          var ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          ok ? resolve() : reject(new Error('execCommand copy failed'));
+        } catch (err) { reject(err); }
+      });
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(txt).catch(fallback);
+    }
+    return fallback();
+  }
+
+  if (qqLink) {
+    qqLink.addEventListener('click', function (ev) {
+      if (!jumped) {
+        // 第一次：放行，正常跳到 QQ 加群页，同时打上「已跳出去」的标记
+        jumped = true;
+        markLeft(true);
+        return;
+      }
+      // 第二次及以后：不再跳转，改为复制群号
+      ev.preventDefault();
+      copyText(GROUP_NO).then(function () {
+        qqLink.classList.add('copied');
+        showToast('群号已复制 <b>' + GROUP_NO + '</b>　去 QQ 粘贴搜索');
+      }, function () {
+        // 复制被浏览器拦住时，至少把号码选中，用户按 Ctrl+C / 长按就能拿走
+        try {
+          var r = document.createRange();
+          r.selectNodeContents(qqLink);
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(r);
+        } catch (e) {}
+        showToast('复制被拦截，已选中 <b>' + GROUP_NO + '</b>　按 Ctrl+C / 长按复制');
+      });
+    });
+  }
 })();
 </script>
 </body>
