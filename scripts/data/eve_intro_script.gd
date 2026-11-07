@@ -16,13 +16,18 @@ const FPS := 30.0
 
 ## 背景视频（Godot 的 VideoStream 只认 .ogv / Ogg Theora，见 README 那条实测结论）
 const VIDEO := "res://assets/video/intro_guard_border.ogv"
-const VIDEO_LEN := 23.104                       ## 实测；末句没视频，从这里往后交给信标
+const VIDEO_LEN := 23.104                       ## 实测
 
-## 末段（信标展开）的时间轴 —— 全部相对视频结束点
-const BEACON_IN := 23.30                        ## 3D 层开始淡入（此刻视频已播完）
-const BEACON_UNFOLD := 23.45                    ## 展开动作起点
-const UNFOLD_DUR := 1.60                        ## 展开动作时长（离线验证过：−90° → −25.3°，64.7°）
-const PROMPT_AT := 25.60                        ## 出「▶ 进入边境」的时刻
+## 末段：信标展开视频（飞船放出信标 → 传送门展开，16.63 s）
+## ★ 2026-11-02：原来这一段的 3D 信标展开动画（EveCynoBeacon）换成实拍视频整段播放。
+##   时间码全部相对**第一段视频结束点**。
+const VIDEO2 := "res://assets/video/intro_beacon.ogv"
+const VIDEO2_LEN := 16.63                       ## ffmpeg 实测时长
+const VIDEO2_IN := 24.40                        ## 第二段开始（末句 t1≈24.27 播完之后）
+const PROMPT_AT := VIDEO2_IN + VIDEO2_LEN + 0.20   ## 出「▶ 进入边境」的时刻（≈41.23）
+## 「跳过对话」的落点：只差 RAMP 那么一点点就到提示 ⇒ 点一次就能进边境，
+## 不再像以前那样「跳到末段后还要干等、再点一次」。
+const SKIP_TO := VIDEO2_IN + VIDEO2_LEN - 0.15
 
 ## 逐字速度（字/秒）。窗口装不下时按窗口反推提速（不截断）。
 const CPS := 18.0

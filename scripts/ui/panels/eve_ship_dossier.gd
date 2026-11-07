@@ -348,10 +348,10 @@ func _build_contents() -> void:
 	_empty_box.add_child(h)
 
 	var p := Label.new()
-	# ⚠️ 2026-10-30：原文案写的是「战场 / 备战席 / **商店卡** 任一处点选即可」，
-	#    但商店卡上那一下的语义是**购买**（`EveShop.buy_requested`），不是点选。
-	#    ⇒ 删掉「商店卡」，别摆一个「写着能点、点了花钱」的入口。
-	p.text = T.t("DOSSIER_EMPTY_P", "战场 / 备战席\n任一处点选即可")
+	# ★ 2026-11-07：商店卡重新变成**合法的点选入口** —— 它现在第一下只是
+	#   展开档案（`EveShop.preview_requested`），不再直接扣钱。
+	#   （2026-10-30 删掉「商店卡」是因为那一下的语义是购买，见当时的说明。）
+	p.text = T.t("DOSSIER_EMPTY_P", "战场 / 备战席 / 商店卡\n任一处点选即可")
 	p.add_theme_color_override("font_color", C_TEXT_FAINT)
 	FONT.fs(p, 9)
 	p.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

@@ -103,6 +103,7 @@ var _lines: Array = []
 var _line_idx := -1
 var _paused := false
 var _prompt := false
+var _cinematic := false               ## 末段信标视频期间：整层让位，只留「跳过对话」
 var _portraits: Dictionary = {}
 
 
@@ -342,10 +343,30 @@ func show_task(text: String) -> void:
 ## 末段：收起「上一步 / 暂停」，把主按钮变成「▶ 进入边境」
 func set_prompt(on: bool) -> void:
 	_prompt = on
-	_btn_prev.visible = not on
-	_btn_next.visible = not on
-	_btn_pause.visible = not on
+	_btn_prev.visible = not on and not _cinematic
+	_btn_next.visible = not on and not _cinematic
+	_btn_pause.visible = not on and not _cinematic
 	_btn_skip.text = "▶　进入边境" if on else "跳过对话"
+
+
+## 末段信标视频期间（`on = true`）：藏掉半透明带 / 头像 / 对话框 / 其余按钮，
+## **只留一个「跳过对话」**，让整屏画面给电影镜头。
+## ⚠️ 两个开关互相开会打架（`set_prompt` 也想管这三个按钮的可见性）
+## ⇒ 两者都同时看 `_prompt` 和 `_cinematic`，谁后调用都不会把另一边覆盖掉。
+func set_cinematic(on: bool) -> void:
+	_cinematic = on
+	_band.visible = not on
+	_btn_prev.visible = not on and not _prompt
+	_btn_next.visible = not on and not _prompt
+	_btn_pause.visible = not on and not _prompt
+	_btn_skip.visible = true
+	if on:
+		_port_box.visible = false
+		_dlg_box.visible = false
+		_btn_skip.text = "▶　进入边境" if _prompt else "跳过对话"
+	else:
+		_port_box.visible = _line_idx >= 0
+		_dlg_box.visible = _line_idx >= 0
 
 
 func set_paused(on: bool) -> void:

@@ -30,10 +30,12 @@ URL = sys.argv[1]
 WAIT = float(sys.argv[2]) if len(sys.argv) > 2 else 30.0
 
 prof = tempfile.mkdtemp(prefix="cdp_audio_")
+# ⛔ 不要加 --autoplay-policy=no-user-gesture-required：那样会绕过浏览器的
+#    自动播放限制，测出来的「有声音」在真浏览器里根本不成立。要的就是真实策略。
 p = subprocess.Popen(
     [CHROME, "--headless=new", "--remote-debugging-port=0",
      f"--user-data-dir={prof}", "--use-angle=swiftshader",
-     "--enable-unsafe-swiftshader", "--autoplay-policy=no-user-gesture-required",
+     "--enable-unsafe-swiftshader",
      "--window-size=1280,800", "about:blank"],
     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -70,24 +72,49 @@ def call(method, params=None, timeout=40):
 call("Page.enable")
 call("Runtime.enable")
 call("Log.enable")
+# ★ 在页面脚本执行**之前**埋钩子，记录所有 AudioContext 实例。
+#   [WHY] Godot 4 web 的音频要等浏览器给一次「用户手势」才允许启动 AudioContext，
+#         而它自己不会把这个对象挂到 window 上 ⇒ 只能从构造函数拦。
+call("Page.addScriptToEvaluateOnNewDocument", {"source": """
+(function(){
+  window.__ctxs = [];
+  var AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  var Wrapped = function(){
+    var c = new AC(...arguments);
+    window.__ctxs.push(c);
+    return c;
+  };
+  Wrapped.prototype = AC.prototype;
+  window.AudioContext = Wrapped;
+  if (window.webkitAudioContext) window.webkitAudioContext = Wrapped;
+})();
+"""})
 call("Page.navigate", {"url": URL})
 time.sleep(WAIT)
 
+# 模拟一次真实点击：CDP 派发的是可信事件，浏览器会因此解除自动播放限制。
+# 注意这不代表「Godot 收到了点击」—— 只是让 AudioContext 有机会从 suspended 变 running。
+call("Input.dispatchMouseEvent", {"type": "mousePressed", "x": 640, "y": 400,
+                                  "button": "left", "clickCount": 1, "buttons": 1})
+call("Input.dispatchMouseEvent", {"type": "mouseReleased", "x": 640, "y": 400,
+                                  "button": "left", "clickCount": 1, "buttons": 0})
+time.sleep(3)
+
 probe = """(function(){
-  var out = {ctxs: [], godot: (typeof GodotAudio !== 'undefined')};
-  try {
-    if (typeof GodotAudio !== 'undefined' && GodotAudio.ctx) {
-      out.ctxs.push({name: 'GodotAudio.ctx', state: GodotAudio.ctx.state,
-                     rate: GodotAudio.ctx.sampleRate});
-    }
-  } catch (e) { out.err = String(e); }
-  out.globalNames = Object.keys(window).filter(function(k){
-    return /audio|godot/i.test(k); });
-  return JSON.stringify(out);
+  var cs = window.__ctxs || [];
+  return JSON.stringify({
+    count: cs.length,
+    states: cs.map(function(c){ return c.state; }),
+    times: cs.map(function(c){ return Math.round(c.currentTime * 1000) / 1000; })
+  });
 })()"""
-r = call("Runtime.evaluate", {"expression": probe, "returnByValue": True})
-print("== 页面内音频对象 ==")
-print(r.get("result", {}).get("value"))
+r1 = call("Runtime.evaluate", {"expression": probe, "returnByValue": True})
+time.sleep(2)
+r2 = call("Runtime.evaluate", {"expression": probe, "returnByValue": True})
+print("== AudioContext（点击前/后各取一次，看 currentTime 有没有在走）==")
+print("  第一次:", r1.get("result", {}).get("value"))
+print("  第二次:", r2.get("result", {}).get("value"))
 
 print("\n== 控制台里与音频相关的行 ==")
 hits = [l for l in logs if "EveAudio" in l or "音频" in l or "音源" in l

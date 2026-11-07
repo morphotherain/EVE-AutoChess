@@ -25,6 +25,9 @@ extends "res://scripts/ui/eve_window.gd"
 ##   - buy_requested / refresh_requested / levelup_requested / salvage_requested 信号
 
 signal buy_requested(offer_index: int)
+## ★ 2026-11-07（玩家反馈：「买船的时候，要能点开看船的属性」）：
+## 第一次点卡片**不下单**，先发这个信号让主控把右上角舰船档案换成这艘船。
+signal preview_requested(offer_index: int)
 signal refresh_requested()
 signal levelup_requested()
 signal lock_toggled(on: bool)
@@ -56,6 +59,18 @@ var _offers: Array = []
 ## ★ 阶段闸门：只有准备阶段为 true（见 `set_buy_enabled()`）。
 ##  false 时整排卡压暗且点击早退 —— 消灭「非准备阶段点卡没反应」。
 var _buy_enabled: bool = true
+
+## ★ 2026-11-07（玩家反馈：「买船的时候，得能点开看属性」）：
+## **两段式下单** —— 第一次点卡片 = 选中并展开档案（金边 + 状态栏提示），
+## 第二次点同一张才真的扣钱。
+##
+## [WHY] 卡片上只有「攻 / 防」两个数，玩家想知道护盾/结构/武器/射程/羁绊
+##       就必须先买下来再看 —— 但买错了要退，等于逼玩家赌。
+## [WHY] 不用「长按 / 右键」：手机上长按没有可见提示，新玩家永远发现不了；
+##       而且这游戏的触摸会被模拟成鼠标，右键在触屏上根本不存在。
+## [PITFALL] 所以 `_armed` 必须能被三条路清掉：换货（买走 / 刷新）、
+##       离开准备阶段、以及**再点一次**（下单）。漏一条就会「卡片一直亮着金边」。
+var _armed: int = -1
 
 var _coin_label: Label
 var _bench_label: Label
@@ -269,6 +284,12 @@ func set_buy_enabled(on: bool) -> void:
 	if _buy_enabled == on:
 		return
 	_buy_enabled = on
+	if not on:
+		# ★ 离开准备阶段 ⇒ 作废「已选中」（否则回来时那张卡还亮着金边，
+		#   而金边语义是「再点一次就下单」—— 那会是个假承诺）。
+		_armed = -1
+		_paint_armed()
+		_refresh_status_text()
 	set_affordable(coin)
 
 
@@ -410,6 +431,9 @@ func _build_card() -> Dictionary:
 ## 设置 5 张卡的报价。offers 的元素是 EveShipDatabase 出来的 Dictionary
 func set_offers(offers: Array) -> void:
 	_offers = offers
+	# ★ 换货 = 上一张的「选中」作废（买走后补空位 / 刷新 都会走到这里）。
+	#   ⚠️ 必须在 `_fill_card` 之前清 —— 否则新卡片会继承旧卡片的金边。
+	_armed = -1
 	while _cards_row.get_child_count() < CARD_COUNT:
 		var c := _build_card()
 		var idx := _cards_row.get_child_count()
@@ -422,7 +446,9 @@ func set_offers(offers: Array) -> void:
 		var w: Dictionary = _card_widgets[i]
 		var offer = offers[i] if i < offers.size() else null
 		_fill_card(w, offer, i)
+	_paint_armed()
 	set_affordable(coin)
+	_refresh_status_text()
 
 
 var _card_widgets: Array[Dictionary] = []
@@ -522,9 +548,70 @@ func _on_card_input(event: InputEvent, index: int) -> void:
 	#   这一句是**兜底**（压暗万一没生效，也不能让请求发出去被静默拒）。
 	if not _buy_enabled:
 		return
-	if event is InputEventMouseButton and event.pressed \
-			and event.button_index == MOUSE_BUTTON_LEFT:
+	if not (event is InputEventMouseButton and event.pressed \
+			and event.button_index == MOUSE_BUTTON_LEFT):
+		return
+	# 空槽（已买走）点了什么都不该发生 —— 但也不能静默：
+	# 卡片自己写着「已买走」，再弹提示反而是噪音，安静返回即可。
+	var offer = _offers[index] if index < _offers.size() else null
+	if offer == null or not (offer is Dictionary) or (offer as Dictionary).is_empty():
+		return
+	if _armed == index:
+		# 第二下 = 下单。⚠️ 先清选中再发信号：`buy_requested` 会触发换货，
+		# `set_offers()` 里也会清一次（两处都清是幂等的，但顺序反了会出现
+		# 「新卡片继承了旧卡片的金边」）。
+		_set_armed(-1)
 		buy_requested.emit(index)
+		return
+	# 第一下 = 预览：展开档案 + 亮金边 + 状态栏写「再点一次购买」
+	_set_armed(index)
+	preview_requested.emit(index)
+
+
+## 选中 / 取消选中某一张报价卡。
+##
+## ⚠️ 只改视觉与状态栏，**不碰任何数据** —— 真正的扣钱发生在第二次点击。
+func _set_armed(index: int) -> void:
+	if _armed == index:
+		return
+	_armed = index
+	_paint_armed()
+	_refresh_status_text()
+
+
+## 把「选中」画出来：金边 + 略亮的底色（2px 边比 1px 更醒目，不改卡片尺寸）。
+func _paint_armed() -> void:
+	for i in _card_widgets.size():
+		var w: Dictionary = _card_widgets[i]
+		var root: PanelContainer = w["root"]
+		var on := i == _armed
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.106, 0.086, 0.043, 0.90) if on \
+				else Color(0.035, 0.047, 0.055, 0.72)
+		sb.border_color = C_GOLD if on else Color(0.42, 0.55, 0.60, 0.40)
+		sb.set_border_width_all(2 if on else 1)
+		sb.set_corner_radius_all(0)
+		root.add_theme_stylebox_override("panel", sb)
+
+
+## 状态栏（标题栏右侧那格小字）：没选中时显示备战席计数，选中时改成下单提示。
+##
+## [WHY] 只有金边还不够 —— 玩家不知道"金边之后该做什么"。这一行是唯一
+##       能写全「再点一次购买 ◆N」的位置（卡片上塞不下，且会盖掉数值）。
+func _refresh_status_text() -> void:
+	if _armed < 0 or _armed >= _offers.size():
+		set_status(T.t("SHOP_BENCH", "备战席 %d / %d") % [bench_used, bench_cap])
+		return
+	var d = _offers[_armed]
+	if not (d is Dictionary):
+		set_status(T.t("SHOP_BENCH", "备战席 %d / %d") % [bench_used, bench_cap])
+		return
+	var nm := String((d as Dictionary).get("name", ""))
+	if (d as Dictionary).has("from_node"):
+		set_status("已选 %s · 再点一次领取" % nm)
+		return
+	set_status("已选 %s · 再点一次购买 ◆%d"
+			% [nm, int((d as Dictionary).get("cost", 0))])
 
 
 static func _faction_color(faction: int) -> Color:
@@ -821,7 +908,10 @@ func set_economy(p_coin: int, p_level: int, p_xp: int, p_xp_need: int,
 func set_bench(used: int, cap: int) -> void:
 	bench_used = used
 	bench_cap = cap
-	set_status(T.t("SHOP_BENCH", "备战席 %d / %d") % [used, cap])
+	# ★ 2026-11-07：选中报价时，这格小字归「再点一次购买」用。
+	#   `set_bench()` 每次 `run.changed` 都会来一遍（经济刷新），
+	#   无条件覆盖的话下单一瞬间提示就消失 —— 玩家会以为"没选中"。
+	_refresh_status_text()
 
 
 # ------------------------------------------------------------------ 自绘件

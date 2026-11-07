@@ -13,10 +13,10 @@ extends Node
 ##   ③ 三个按钮必须 `MOUSE_FILTER_STOP` 且能发出信号 —— 只是"画上去"就挂
 ##   ④ 暂停后时间真源 `_t` 必须**一动不动** —— 只是把按钮变灰就挂
 ##   ⑤ 「上一步」必须把 `_t` 拉回上一句的 t0（而不是只清一下画面）—— 糊弄就挂
-##   ⑥ 信标收起态四片叶仰角必须 ≈ −90°、展开态 ≈ −25.3° —— 铰链轴选错/符号反了就挂
+##   ⑥ 末段信标**视频**：VIDEO2_IN 之前必须隐藏、之后必须淡入并播到 PROMPT_AT —— 提前露头/不播都挂
 ##   ⑦ 「首次 / 非首次」的判定必须**随进度存档翻转** —— 写死成两句话就挂
 ##   ⑧ 「下一步」两段行为必须都在：没显示完 ⇒ 只补全（时间不动）；显示完 ⇒ 真跳下一句
-##   ⑨ 「跳过对话」必须真的跳到末段 —— 又顺手把人送出开场就挂
+##   ⑨ 「跳过对话」必须**一步到末段尾**（SKIP_TO），且再点一次就能进边境 —— 只把人送到末段起点就挂
 ##
 ## ⚠️ 关键不变量禁用 assert（release 会剥离）⇒ 一律 push_warning + 计数。
 ## ⚠️ 本文件会**动玩家的进度存档** ⇒ 开头存快照、结尾原样写回（工程铁律）。
@@ -31,8 +31,6 @@ const MENU_SCENE := preload("res://scenes/main_menu.tscn")
 const MENU_PATH := "res://scenes/main_menu.tscn"
 const BATTLE_SCENE := "res://scenes/battle_scene.tscn"
 
-## 与 EveCynoBeacon.LEAF_ELEV 同值 —— 展开后叶片应有的仰角
-const LEAF_ELEV_OPEN := -25.3
 const MENU_INTRO := "res://scenes/intro_scene.tscn"
 const MENU_BATTLE := "res://scenes/battle_scene.tscn"
 
@@ -40,7 +38,7 @@ var _pass: int = 0
 var _fail: int = 0
 var _intro: Variant = null
 var _overlay: Variant = null
-var _beacon: Variant = null
+var _video2: Variant = null
 var _saved: Dictionary = {}
 
 
@@ -70,7 +68,7 @@ func _ready() -> void:
 	await _phase_intro_clean()
 	await _phase_dialogue()
 	await _phase_buttons()
-	await _phase_beacon()
+	await _phase_beacon_video()
 	_phase_progress()
 	await _check_menu_wiring()
 
@@ -116,19 +114,30 @@ func _phase_scene_and_layers() -> void:
 			_ok(vs.get_class() == "VideoStreamTheora",
 					"★ 视频格式 = Ogg Theora（实际 %s；mp4 引擎不认）" % vs.get_class())
 
-	var layer: Node = _intro.get_node_or_null("BeaconLayer")
-	_ok(layer != null, "信标 3D 层存在（BeaconLayer）")
-	if layer != null:
-		_ok((layer as Control).mouse_filter == Control.MOUSE_FILTER_IGNORE,
-				"信标层不吃点击")
+	var seg: Node = _intro.get_node_or_null("BeaconVideo")
+	_ok(seg != null, "末段信标视频层存在（BeaconVideo）")
+	if seg != null:
+		_ok(seg is VideoStreamPlayer, "末段是 VideoStreamPlayer")
+		_ok((seg as Control).mouse_filter == Control.MOUSE_FILTER_IGNORE,
+				"信标视频层不吃点击")
+		var vs2: Variant = (seg as VideoStreamPlayer).stream
+		_ok(vs2 != null, "信标视频已加载（%s）" % SCRIPT.VIDEO2)
+		if vs2 != null:
+			_ok(vs2.get_class() == "VideoStreamTheora",
+					"★ 信标视频格式 = Ogg Theora（实际 %s）" % vs2.get_class())
+		# 🚫 反向注入：末段视频提前露头 = 片头画面被盖住
+		_ok(not (seg as CanvasItem).visible, "VIDEO2_IN 之前信标视频是隐藏的")
 
 	_overlay = _intro.overlay_ref()
-	_beacon = _intro.beacon_ref()
+	_video2 = _intro.video2_ref()
 	_ok(_overlay != null, "对话层存在")
-	_ok(_beacon != null, "信标节点存在")
+	_ok(_video2 != null, "信标视频节点可访问")
 	_ok(_overlay.get_parent() == _intro and _overlay != vid,
 			"对话层与视频层是**两个独立节点**（不是同一棵子树）")
-
+	if seg != null and vid != null:
+		_ok(seg.get_index() > vid.get_index(),
+				"信标视频叠在背景视频**之上**（子节点顺序 %d > %d）"
+				% [seg.get_index(), vid.get_index()])
 
 # ─────────────────────────────────────────────── ② 片头整屏干净
 func _phase_intro_clean() -> void:
@@ -261,18 +270,28 @@ func _phase_buttons() -> void:
 	_ok(_overlay.current_index() == 4,
 			"★ 反向注入⑧-b：再点「下一步」才真进下一句（实际 idx=%d）" % _overlay.current_index())
 
-	# ── 跳过对话：必须到末段，不许直接退对局 ──
+	# ── 跳过对话：必须一步到末段尾，不许直接退对局 ──
 	_intro.next_scene = ""                       # 保险：万一它真想切场景也不会把自检干掉
 	_intro.seek(5.00)
 	await get_tree().process_frame
 	_ok(_overlay.current_index() == 2, "先停在对话中段（实际 idx=%d）" % _overlay.current_index())
 	skip.pressed.emit()
 	await get_tree().process_frame
-	_ok(_intro.elapsed() >= SCRIPT.BEACON_IN - 1e-3,
-			"★ 反向注入⑨：「跳过对话」跳到末段 t=%.2f（实际 %.2f）"
-			% [SCRIPT.BEACON_IN, _intro.elapsed()])
+	_ok(absf(_intro.elapsed() - SCRIPT.SKIP_TO) < 1e-3,
+			"★ 反向注入⑨：「跳过对话」一步到位 SKIP_TO=%.2f（实际 %.2f）"
+			% [SCRIPT.SKIP_TO, _intro.elapsed()])
 	_ok(_intro.elapsed() < SCRIPT.PROMPT_AT,
 			"跳过对话**没跳过头**到任务提示（%.2f < %.2f）" % [_intro.elapsed(), SCRIPT.PROMPT_AT])
+	_ok(_intro.elapsed() >= SCRIPT.SKIP_TO - 1e-3,
+			"落点已经贴近提示（只差 %.2fs，不再干等整段）"
+			% (SCRIPT.PROMPT_AT - SCRIPT.SKIP_TO))
+	# ★ 用户反馈的核心：「跳过之后还要再等/再点一次」—— 现在就验第二次点能直达提示
+	skip.pressed.emit()
+	await get_tree().process_frame
+	_ok(_intro.elapsed() >= SCRIPT.PROMPT_AT - 1e-3,
+			"★ 在末段尾再点一次 ⇒ 立即出任务提示（t=%.2f）" % _intro.elapsed())
+	_ok(skip.text.contains("进入边境"),
+			"★ 再点一次后按钮已是「进入边境」（实际 %s）" % skip.text)
 
 	# ── 末段：上一步/下一步/暂停收起，主按钮变「进入边境」 ──
 	_intro.seek(SCRIPT.PROMPT_AT + 0.10)
@@ -284,44 +303,50 @@ func _phase_buttons() -> void:
 	_ok(skip.pressed.get_connections().size() > 0, "「进入边境」已接线")
 
 
-# ─────────────────────────────────────────────── ⑤ 信标展开
-func _phase_beacon() -> void:
-	print("\n[5] 信标展开动画")
-	_intro.seek(22.00)
+# ─────────────────────────────────────────────── ⑤ 末段信标视频
+func _phase_beacon_video() -> void:
+	print("\n[5] 末段信标视频（替代原 3D 展开动画）")
+	# ① 第二段之前：隐藏，第一段还留在屏幕上（不能黑屏）
+	_intro.seek(SCRIPT.VIDEO2_IN - 1.0)
 	await get_tree().process_frame
-	_ok(_beacon.progress() <= 0.001,
-			"★ 23.30 之前信标是收起态（progress=%.3f）" % _beacon.progress())
-	var elev_fold: PackedFloat32Array = _beacon.hinge_elevations()
-	_ok(elev_fold.size() == 4, "四片叶都在（实际 %d）" % elev_fold.size())
-	var ok_fold := true
-	for e in elev_fold:
-		if absf(e - (-90.0)) > 0.6:
-			ok_fold = false
-	_ok(ok_fold, "★ 反向注入⑥：收起态四片叶仰角都 ≈ −90°（竖直贴塔身）实测 %.1f/%.1f/%.1f/%.1f"
-			% [elev_fold[0], elev_fold[1], elev_fold[2], elev_fold[3]])
+	_ok(not _video2.visible, "★ VIDEO2_IN 之前信标视频隐藏（t=%.2f）" % _intro.elapsed())
+	_ok(_overlay.current_index() >= 0, "此时最后一句台词还挂着（idx=%d）" % _overlay.current_index())
 
-	# 展开动画是靠 Tween 跑的：这里直接拨到进度 1，验终态
-	_beacon.set_progress(1.0)
+	# ② 进入末段：淡入 + 播；对话层让位（只留「跳过对话」）
+	_intro.seek(SCRIPT.VIDEO2_IN + 0.30)
 	await get_tree().process_frame
-	var elev_open: PackedFloat32Array = _beacon.hinge_elevations()
-	var ok_open := true
-	for e in elev_open:
-		if absf(e - LEAF_ELEV_OPEN) > 0.6:
-			ok_open = false
-	_ok(ok_open, "★ 展开态四片叶仰角都 ≈ %.1f°（向外下）实测 %.1f/%.1f/%.1f/%.1f"
-			% [LEAF_ELEV_OPEN, elev_open[0], elev_open[1], elev_open[2], elev_open[3]])
-	_ok(absf(_beacon.progress() - 1.0) < 1e-6, "展开进度可拨到 1.0")
-	_ok(_beacon.is_unfolded(), "is_unfolded() 为真")
-	var body_mi: Node = _beacon.get_node_or_null("Body")
-	_ok(body_mi != null, "★ 塔身网格节点存在（Body）—— 载不到 OBJ 时这条会挂")
-	if body_mi != null:
-		var mm: Mesh = (body_mi as MeshInstance3D).mesh
-		var sc := 0 if mm == null else mm.get_surface_count()
-		_ok(sc > 0, "塔身网格有面（surface=%d）" % sc)
-		# 立正检查：模型 +Y 朝下，必须绕 X 转 180°
-		_ok(absf((body_mi as MeshInstance3D).rotation_degrees.x - 180.0) < 0.01,
-				"★ 塔身已 R_x(180°) 立正（实际 %.1f°）"
-				% (body_mi as MeshInstance3D).rotation_degrees.x)
+	_ok(_video2.visible, "★ 过了 VIDEO2_IN 信标视频出现")
+	_ok(_video2.modulate.a > 0.05, "淡入进行中（a=%.2f）" % _video2.modulate.a)
+	_ok(_overlay.current_index() == -1, "末段视频期间台词收起（idx=%d）" % _overlay.current_index())
+	_ok(_overlay.button("Prev").visible == false and _overlay.button("Next").visible == false,
+			"★ 末段视频期间「上一步 / 下一步」收起")
+	_ok(_overlay.button("Skip").visible and _overlay.button("Skip").text == "跳过对话",
+			"★ 但「跳过对话」必须还在（否则 16 秒镜头跳不过去）")
+	_ok(not _video2.paused, "末段视频正在播放（paused=false）")
+
+	# ③ 播完：定格在最后一帧，出任务提示
+	_intro.seek(SCRIPT.PROMPT_AT + 0.10)
+	await get_tree().process_frame
+	_ok(_video2.stream_position >= SCRIPT.VIDEO2_LEN - 0.10,
+			"★ 提示态的信标视频已走到片尾（position=%.2f / %.2f）"
+			% [_video2.stream_position, SCRIPT.VIDEO2_LEN])
+	_ok(_video2.modulate.a >= 0.99, "信标视频不透明（a=%.2f）" % _video2.modulate.a)
+	_ok(_overlay.button("Skip").text.contains("进入边境"), "主按钮 = 进入边境")
+
+	# ④ 时间轴自洽：提示必须落在视频播完之后
+	_ok(SCRIPT.PROMPT_AT >= SCRIPT.VIDEO2_IN + SCRIPT.VIDEO2_LEN,
+			"★ PROMPT_AT(%.2f) ≥ VIDEO2_IN+VIDEO2_LEN(%.2f) ⇒ 不会提前打断镜头"
+			% [SCRIPT.PROMPT_AT, SCRIPT.VIDEO2_IN + SCRIPT.VIDEO2_LEN])
+	_ok(SCRIPT.SKIP_TO < SCRIPT.PROMPT_AT, "SKIP_TO 在提示之前（%.2f < %.2f）"
+			% [SCRIPT.SKIP_TO, SCRIPT.PROMPT_AT])
+	_ok(SCRIPT.PROMPT_AT - SCRIPT.SKIP_TO <= 1.0,
+			"★ 跳过落点离提示 ≤1s（实际 %.2fs）⇒ 点一下就不会觉得「卡」"
+			% (SCRIPT.PROMPT_AT - SCRIPT.SKIP_TO))
+
+	# ⑤ 回退（上一步）：信标视频必须重新藏起来，不能残留在画面上
+	_intro.seek(10.00)
+	await get_tree().process_frame
+	_ok(not _video2.visible, "★ 退回对话段时信标视频收起（不残留）")
 
 
 # ─────────────────────────────────────────────── ⑥ 进度存档

@@ -331,6 +331,17 @@ var _codex: Control = null
 ##   ⚠️ 文本为空时整行隐藏 —— 平时玩家看到的还是干净的主界面，
 ##      只有「正在下载 / 已就绪重启生效 / 校验失败」时才有话说。
 var _update_tag: Label = null
+## ★ 2026-11-07（用户需求）：发现新版本时**主动弹窗问是否更新**。
+##   ⚠️ 与 `_update_tag` 是两件事，别拿小字替代弹窗：
+##      小字报的是**进度**（下载中 / 已就绪），弹窗问的是**决策**（下不下）。
+var _update_dialog: EveConfirmDialog = null
+## 弹窗当前在问什么：0 = 没在问 / 1 = 问要不要下载 / 2 = 问要不要重启。
+## ⚠️ 一个弹窗实例被**两次提问复用** ⇒ 必须靠这个字段区分 `confirmed` 该干什么。
+var _update_stage := 0
+## 本次运行是否已经问过。
+## ⚠️ 「稍后」**不持久化**（用户 2026-11-07 定：下次启动照样问）⇒ 纯内存标志，
+##    ⛔ 不要写进任何存档。它唯一的作用是拦住「信号 + 读字段」两条路的重复弹窗。
+var _update_prompted := false
 ## ★ 2026-11-01 鸣谢名单：版本号上方按钮 + 右侧独立面板。
 ##   ⚠️ 只建一次，之后靠 `visible` 切换（与版权声明面板同口径，避免闪烁 / 丢引用）。
 var _ack_panel: PanelContainer = null
@@ -408,6 +419,8 @@ func _ready() -> void:
 	#   ⚠️ 必须放在界面全部建完之后：前面任何一步崩掉都算「这次启动失败」，
 	#      计数留着才有意义（见 `EveUpdater` 的坏包三次自动回退）。
 	EveUpdater.mark_boot_ok()
+	# ★ 2026-11-07：接上「发现新版本」的询问链路（见 `_wire_updater`）。
+	_wire_updater()
 
 
 ## 把内容层摆到「基准区居中」的位置。
@@ -838,6 +851,19 @@ func _build_sys() -> void:
 	_content.add_child(box)
 
 
+## 点右下角版本号 → 打开「发送诊断信息」（诊断上报入口，见 `EveReport`）。
+## [NOTE] 安卓的触摸会额外模拟出鼠标事件，但这里两种都收：真机上万一没模拟，
+##        至少触摸还能点得动。
+func _on_version_tag_input(ev: InputEvent) -> void:
+	var hit := false
+	if ev is InputEventMouseButton:
+		hit = ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT
+	elif ev is InputEventScreenTouch:
+		hit = ev.pressed
+	if hit:
+		EveReport.open_feedback()
+
+
 ## ★ 2026-10-10 主界面**右下角**版本号（显示 `V<application/config/version>`）。
 ##
 ## ⚠️ 版本号**只读 `application/config/version`**（`project.godot` 的 `config/version`）
@@ -858,6 +884,13 @@ func _build_version_tag() -> void:
 	#    亮星云（实测 RGB≈160,180,192），浅色字根本读不出来；深色字对比度 ≈ 6:1。
 	var tag := _label(T.t("MENU_VERSION", "当前版本 V%s") % ver, 11, Color(0.12, 0.16, 0.19, 0.92))
 	tag.name = "VersionTag"
+	# ★ 2026-11-07 诊断上报入口：**点右下角版本号** = 打开「发送诊断信息」。
+	# [WHY] 不新增按钮：系统行已经四个按钮、宽度卡死（见 _build_sys 的注释）；
+	#       而玩家真出问题时，第一个会去看的就是版本号 —— 入口放这儿不占布局。
+	tag.mouse_filter = Control.MOUSE_FILTER_STOP
+	tag.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	if not tag.gui_input.is_connected(_on_version_tag_input):
+		tag.gui_input.connect(_on_version_tag_input)
 	tag.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	tag.offset_left = -170.0
 	tag.offset_right = -56.0
@@ -913,6 +946,126 @@ func _refresh_update_tag() -> void:
 	var s := String(EveUpdater.status_text)
 	_update_tag.text = s
 	_update_tag.visible = s != ""
+
+
+# ══════════════════════════════════════════════════════════════════
+#  ★ 2026-11-07（玩家需求）：发现新版本 → 主动弹窗问「要不要更新」
+# ══════════════════════════════════════════════════════════════════
+#
+#  设计口径（用户 2026-11-07 拍板，三条）：
+#    ① 「稍后」= 本次不问，**下次启动再问**（不做「跳过此版本」的持久化记忆）
+#    ② 下载完 → 再弹一次，给「立即重启」
+#    ③ 时机 = 主菜单铺好后约 1.5 秒（不打断开场动画）
+#
+#  ⚠️ 为什么 ②③ 不能用 `await create_timer()`：玩家完全可能在这 1.5 秒里
+#     就点了「开始游戏」⇒ 本节点被 free ⇒ 协程恢复时打
+#     "Resumed function after await, but the object was freed" 的错。
+#     用本节点的子 Timer，跟着一起销毁，回调根本不会跑。
+
+## 接上热更器的广播。
+##
+## ⚠️⚠️ **信号 + 字段两条路都要**：`check()` 在 autoload 阶段（启动两帧后）就跑，
+##     那时本菜单的 `_ready()` 未必执行到 —— 信号发出去没人接就是彻底丢了。
+##     所以先连信号，再补读一次 `pending_update`；重复弹由 `_update_prompted` 拦。
+func _wire_updater() -> void:
+	if not EveUpdater.update_available.is_connected(_on_update_available):
+		EveUpdater.update_available.connect(_on_update_available)
+	if not EveUpdater.download_finished.is_connected(_on_update_finished):
+		EveUpdater.download_finished.connect(_on_update_finished)
+	if not EveUpdater.pending_update.is_empty():
+		_on_update_available(EveUpdater.pending_update)
+
+
+func _on_update_available(info: Dictionary) -> void:
+	if _update_prompted:
+		return
+	_update_prompted = true
+	var t := Timer.new()
+	t.name = "UpdateAskDelay"
+	t.one_shot = true
+	t.wait_time = 1.5
+	t.timeout.connect(_on_update_prompt.bind(info))
+	add_child(t)
+	t.start()
+
+
+## 1.5 秒到了 —— 真的弹。
+func _on_update_prompt(info: Dictionary) -> void:
+	if not is_inside_tree():
+		return
+	var cur := String(EveUpdater.build_info().get("version", "?"))
+	var newv := String(info.get("version", "?"))
+	var mb := float(int(info.get("size", 0))) / 1048576.0
+	_update_stage = 1
+	var dlg := _ensure_update_dialog()
+	# ⚠️ `EveConfirmDialog` 的文案行**不开 autowrap**（原因见那个文件顶注 ③：
+	#    autowrap 进容器会把最小宽度塌成一个字）⇒ 每行必须短、且自带 `\n`。
+	dlg.setup(
+			"发现新版本",
+			"当前 V%s → 最新 V%s\n" % [cur, newv]
+			+ "更新包 %s（脚本与数值，不含美术）\n" % _size_text(mb)
+			+ "现在下载吗？",
+			"现在更新", "稍后")
+	dlg.open_dialog()
+
+
+static func _size_text(mb: float) -> String:
+	if mb <= 0.0:
+		return "体积未知"
+	return "%.2f MB" % mb
+
+
+## 下载结束（成功 / 失败都走这里）。
+##
+## ⚠️ 失败**不弹框**：只在右下角那行小字说一句（`changed` 驱动
+##    `_refresh_update_tag`）。网络差是常态，为它糊一个模态框属于添乱。
+func _on_update_finished(ok: bool, version: String) -> void:
+	if not ok or not is_inside_tree():
+		return
+	var v := version
+	if v == "":
+		v = String(EveUpdater.pending_update.get("version", "新版本"))
+	_update_stage = 2
+	var dlg := _ensure_update_dialog()
+	dlg.setup(
+			"更新已就绪",
+			"V%s 已下载完成。\n重启游戏后生效，现在重启吗？" % v,
+			"立即重启", "稍后")
+	dlg.open_dialog()
+
+
+## 建一次、之后复用。
+##
+## ⚠️ 挂在**根节点**（铺满视口的 Control）上，⛔ 不挂 `_content`：
+##    `_content` 是 1920×1080 的居中基准区，非 16:9 时四周有黑边，
+##    弹窗会跟着被裁进那个内容框里，看着像贴了张纸。
+func _ensure_update_dialog() -> EveConfirmDialog:
+	if _update_dialog == null:
+		_update_dialog = EveConfirmDialog.new()
+		_update_dialog.name = "UpdateDialog"
+		add_child(_update_dialog)
+		_update_dialog.confirmed.connect(_on_update_confirmed)
+		_update_dialog.cancelled.connect(_on_update_cancelled)
+	return _update_dialog
+
+
+func _on_update_confirmed() -> void:
+	var stage := _update_stage
+	_update_stage = 0
+	if _update_dialog != null:
+		_update_dialog.close_dialog()
+	match stage:
+		1:
+			# 「现在更新」→ 后台下载。进度走右下角小字，不再弹框。
+			EveUpdater.download_update()
+		2:
+			EveUpdater.restart_app()
+
+
+func _on_update_cancelled() -> void:
+	_update_stage = 0
+	if _update_dialog != null:
+		_update_dialog.close_dialog()
 
 
 ## 「鸣谢名单」按钮：开 / 关同一扇面板。打开时把版权声明面板与难度卡片区让位收掉，避免盖住面板。

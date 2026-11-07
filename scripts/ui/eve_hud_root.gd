@@ -215,6 +215,9 @@ var button_skin: String = "hud"
 signal start_battle_requested()
 signal settings_requested()
 signal shop_buy_requested(offer_index: int)
+## ★ 2026-11-07：商店卡被「选中」（第一次点击）—— 主控据此把右上角
+## 舰船档案换成这艘船的完整属性。**不含买入**，买入仍走 `shop_buy_requested`。
+signal shop_preview_requested(offer_index: int)
 signal shop_refresh_requested()
 signal shop_levelup_requested()
 signal shop_lock_toggled(on: bool)
@@ -374,6 +377,9 @@ func _build_layout() -> void:
 	add_child(shop_window)
 
 	shop_window.buy_requested.connect(func(i: int): shop_buy_requested.emit(i))
+	# ★ 2026-11-07：商店卡「第一下 = 看档案」。少这行的话，卡片会亮金边、
+	#   状态栏写「再点一次购买」，但右上档案一动不动 —— 典型的静默断线。
+	shop_window.preview_requested.connect(func(i: int): shop_preview_requested.emit(i))
 	shop_window.refresh_requested.connect(func(): shop_refresh_requested.emit())
 	shop_window.levelup_requested.connect(func(): shop_levelup_requested.emit())
 	shop_window.lock_toggled.connect(func(on: bool): shop_lock_toggled.emit(on))
@@ -1548,11 +1554,19 @@ func entry_banner_active() -> int:
 
 
 ## 拿起 / 放下备战席舰船 —— 整块化作出售区
-func set_selling(on: bool) -> void:
+##
+## ★ 2026-11-07：加了 `bench` 开关。结算（打捞）期要把商店**常亮成出售区**，
+##   好让玩家知道「钱不够可以卖船」；但备战席轨道**不能**跟着亮 ——
+##   它的 `_draw_selling()` 会写「拖到此处出售」，而落点判定里
+##   备战席是**撤回 / 换位**、出售区只有商店窗。两处都亮橙就是撒谎。
+func set_selling(on: bool, bench: bool = true) -> void:
 	if shop_window:
 		shop_window.set_selling(on)
-	if bench_rail:
+	if bench and bench_rail:
 		bench_rail.set_selling(on)
+	elif bench_rail and not on:
+		# 关的时候无论如何都要收（否则上一阶段的橙条会留在轨道上）
+		bench_rail.set_selling(false)
 
 
 ## 备战席拿起的是第几格（-1 = 没拿起）—— 轨道上显示出「已拿起」标记

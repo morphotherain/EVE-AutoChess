@@ -274,6 +274,19 @@ var boss_attempts: int = 0
 ## ⚠️ 它影响收入 / 利息 / 战败代价 / 敌方强度，**不影响节点顺序**。
 var difficulty_id: String = "simple"
 
+## ★ 2026-11-07（玩家反馈）：「正式进入游戏时自己选择是否进入新手模式」
+##
+## 新手模式 = **取消一切倒计时**：
+##   准备阶段不限时（不自动开战、不会因"没布阵"判负）；
+##   战斗阶段不限时（不判超时，只有一方被打光才结束）；
+##   结算页本来就要玩家点「继续」，天然不限时。
+##
+## [WHY] 做成 run 的字段而不是场景的开关：它必须**跟存档走** ——
+##       「继续上一局」读回来还是新手模式，否则玩家下次进来突然开始读秒。
+## [NOTE] `start_run()` 会把它打回 false（新的一局默认标准节奏），
+##       入口弹框选「开启」之后再置真；局内 `restart_run()` 会显式把它带回来。
+var novice_mode: bool = false
+
 var coin: int = START_GOLD
 var level: int = 1
 var xp: int = 0
@@ -611,6 +624,10 @@ func start_run(p_seed: int = 0) -> void:
 	lose_streak = 0
 	shop_locked = false
 	ending = Ending.NONE
+	# ★ 2026-11-07：新的一局默认**标准节奏**（读秒全开）。
+	#   新手模式的入口弹框在 `start_run()` **之后**才会置真；局内重开由
+	#   `restart_run()` 显式把上一局的选择带回来（见那里的注释）。
+	novice_mode = false
 	# ★★ 2026-10-10（审查 R01）：**局内状态必须整体归零**，别逐个补。
 	#    `restart_run()` 复用同一个 run 对象 ⇒ 这里漏一个字段，它就会带着
 	#    上一局的值进新局。已踩过的两个：
@@ -684,6 +701,7 @@ func to_dict() -> Dictionary:
 		"run_seed": run_seed,
 		"comp_seed": _comp_seed_base,
 		"difficulty": difficulty_id,
+		"novice_mode": novice_mode,
 		"phase": phase,
 		"ending": ending,
 		"coin": coin, "level": level, "xp": xp, "beacon": beacon,
@@ -724,6 +742,8 @@ func from_dict(d: Dictionary) -> bool:
 	_gen_comps.clear()
 	EveEnemyComps.clear_runtime()
 	difficulty_id = String(d.get("difficulty", "simple"))
+	# 老存档没有这个键 ⇒ 默认标准节奏（与读档前的行为一字不差）
+	novice_mode = bool(d.get("novice_mode", false))
 	phase = int(d.get("phase", Phase.PREP))
 	ending = int(d.get("ending", Ending.NONE))
 	coin = int(d.get("coin", START_GOLD))
@@ -1963,6 +1983,37 @@ func sell_from_field(field_index: int) -> Dictionary:
 		return _deny("这一格是空的")
 	var e: Dictionary = field[field_index]
 	return _do_sell(e, field_index, false)
+
+
+## 按**条目本体**出售（⛔ 不是下标）。
+##
+## ★★ 2026-11-07 修的真 bug（玩家反馈：「结算时想卖船，卖完发现少了另一艘」）：
+##
+##   战斗结束时 `resolve_battle()` 会把**阵亡的我方舰船从 `field` 里删掉**
+##   （见那里的长注释），于是：
+##     · 拖放控制器手里的 `_own_field_index` 是**开战前**算出来的映射；
+##     · 战后再拿它去 `sell_from_field(idx)`，下标已经整体前移 ⇒
+##       卖掉的是**另一艘**（或者直接越界失败，玩家以为"结算期不能卖"）。
+##
+##   下标在结算期根本不可靠（列表被改过），所以这段时间按**条目引用**找：
+##   拖起来时抓住的就是那个 Dictionary 本体，`is_same()` 一定认得出它。
+##
+## ⚠️ 用 `is_same()` 而不是 `==`：两艘同名同星的船字典**值**可能完全一样
+##    （都在备战席、`cell` 都是 -1,-1），值比较会卖掉先找到的那一艘。
+##    `is_same()` 比的是"是不是同一个对象"，这才是"我刚拖的那一艘"。
+func sell_entry(entry: Dictionary) -> Dictionary:
+	if not can_sell():
+		return _deny("只有准备阶段和打捞结算时能出售")
+	if entry.is_empty():
+		return _deny("这一格是空的")
+	for i in field.size():
+		if is_same(field[i], entry):
+			return _do_sell(entry, i, false)
+	for i in bench.size():
+		if is_same(bench[i], entry):
+			return _do_sell(entry, i, true)
+	# 找不到 = 这艘船在这一帧之前已经被卖掉了（连点 / 两次松手）。
+	return _deny("这艘船已经不在编队里了")
 
 
 func _do_sell(e: Dictionary, index: int, from_bench: bool) -> Dictionary:

@@ -111,11 +111,17 @@ func begin_drag(pos: Vector2) -> bool:
 	# ② 我方场上舰船：屏幕距离最近的一艘
 	var si := own_ship_at(pos)
 	var fmap: Array = _own_field_index_cb.call()
+	var ships: Array = _own_ships_cb.call()
 	if si >= 0 and si < fmap.size():
 		var fi: int = fmap[si]
 		var entries := _run.field_entries()
 		if fi >= 0 and fi < entries.size():
 			_set_drag(make_drag(entries[fi], &"field", fi))
+			# ★ 2026-11-07（结算期卖船）：记下 3D 实例 id —— 卖成功之后要把
+			#   这艘船的视觉当场收掉（否则"卖了却还站着"）。下标做不到这件事：
+			#   结算期 `run.field` 已被删过元素，`fi` 只是开战前的旧下标。
+			if si < ships.size():
+				drag["ship_id"] = int((ships[si] as EveShip).id)
 			drag["start"] = pos
 			drag["screen"] = pos
 			_begin_drag_visual()
@@ -150,6 +156,11 @@ static func make_drag(e: Dictionary, source: StringName, index: int) -> Dictiona
 	return {
 		"source": source,
 		"index": index,
+		# ★ 2026-11-07：**条目本体（引用）**。结算期出售按它找，而不是按 `index`
+		#   —— 见 `EveRunState.sell_entry()` 顶部的说明（下标在战后会指错人）。
+		"entry": e,
+		# 3D 实例 id（只有 field 起点会补）。卖成功之后用它收掉视觉。
+		"ship_id": -1,
 		"ship_key": key,
 		"star": star,
 		"cost": cost,
@@ -308,6 +319,11 @@ func end_drag(pos: Vector2) -> bool:
 		return true
 	var source := StringName(drag["source"])
 	var index := int(drag["index"])
+	# ⚠️ `finish_drag()` 会清空 drag ⇒ 这三个必须在它之前取出来。
+	#   `entry` = 拖起来的那条编队数据（结算期出售按它找，不看下标）。
+	var entry: Dictionary = drag.get("entry", {})
+	var ship_id := int(drag.get("ship_id", -1))
+	var resolve_stage := _run.phase == EveRunState.Phase.RESOLVE
 
 	# ⚠️ 顺序不能反：**先清拖动状态，再执行落点动作**。
 	#    因为动作会 emit changed，而 _refresh_run_ui 在「拖动中」是跳过舰队重建的。
@@ -320,8 +336,19 @@ func end_drag(pos: Vector2) -> bool:
 		# 出售。日志（含返还金额）由 RunState 自己发，这里不重复写一行
 		if source == &"bench":
 			res = _run.sell_from_bench(index)
+		elif resolve_stage:
+			# ★★ 2026-11-07 修 bug（玩家反馈「结算时卖船，卖的却是另一艘」）：
+			#   战斗结束时 `resolve_battle()` 把阵亡的船从 `run.field` 删掉了，
+			#   而 `index` 来自**开战前**算的映射 ⇒ 整体前移，卖错人。
+			#   结算期一律按条目本体找（`sell_entry` 用 is_same 认对象）。
+			res = _run.sell_entry(entry)
 		else:
 			res = _run.sell_from_field(index)
+		# ★ 2026-11-07：结算期卖掉场上的船 ⇒ 3D 视觉当场收掉。
+		#   不处理的话「船还在原地站着」，玩家会以为没卖出去（要等下个准备阶段
+		#   整队重建才消失）。同时钉 `alive = false`，让拾取 / 存活计数也跳过它。
+		if bool(res.get("ok", false)) and source == &"field" and resolve_stage:
+			_drop_sold_visual(ship_id)
 	else:
 		var cell: Vector2i = _arena.screen_to_cell(pos)
 		var on_mine := cell.x >= 0 and _arena.board != null and _arena.board.is_mine_zone(cell.x)
@@ -345,6 +372,23 @@ func end_drag(pos: Vector2) -> bool:
 	_refresh_ui_cb.call()
 	_log_synergies_cb.call()
 	return false
+
+
+## 结算期卖掉场上的船之后，把它的 3D 视觉与「活着」标记一起收掉。
+##
+## ⚠️ 只在**结算期**走这条路：准备阶段的出售会让 `_refresh_run_ui` 重建整队
+##    （那边自己会 `remove_ship_visual` + 重新摆位），这里再动就是抢活干。
+## ⚠️ 找不到实例（`ship_id < 0` / 已经不在 `_own_ships` 里）就静默跳过 ——
+##    数据那一侧已经卖掉了，视觉多留一帧不影响正确性，比这里崩了强。
+func _drop_sold_visual(ship_id: int) -> void:
+	if ship_id < 0:
+		return
+	for s in _own_ships_cb.call():
+		if int((s as EveShip).id) == ship_id:
+			(s as EveShip).alive = false
+			break
+	if _arena != null:
+		_arena.remove_ship_visual(ship_id)
 
 
 ## 取消：ESC / 右键。落点当成「哪儿都不是」，一个字节的数据都不改。

@@ -99,6 +99,24 @@ func set_time_limit(seconds: float) -> void:
 	max_ticks = maxi(int(10.0 * TICK_RATE), int(seconds * TICK_RATE))
 
 
+## ★ 2026-11-07（新手模式）：「这一场没有时限」。
+##
+## [WHY] 只把顶条倒计时藏起来是不够的 —— 本类还有两道**按时间**的收束：
+##   ① `damage_multiplier()`：时限的 45% 起火力渐增（这是**收敛保证**，保留）；
+##   ② `_check_outcome()` 的 `HARD_STOP_MULT` 安全网：到 3 倍时限还没分出胜负
+##      就按剩余血量强制收场。
+##   新手模式的口径是「只有战场上分出胜负才结束」，所以 ② 必须关掉；
+##   ① 保留（它只放大伤害，不结束战斗，否则两队可能在射程外干瞪眼几分钟）。
+##
+## ⚠️ `set_time_limit()` 仍要照常调用 —— 火力渐增的曲线基准是它，
+##    关掉它会让渐增从第 0 秒就开始（战斗变成一开场就 5 倍伤害）。
+var no_timeout: bool = false
+
+
+func set_no_timeout(on: bool) -> void:
+	no_timeout = on
+
+
 ## 设置敌方思考等级（0~3）。由难度档决定，开打前调用。
 func set_ai_level(level: int) -> void:
 	ai_level = clampi(level, 0, 3)
@@ -1704,7 +1722,7 @@ func _check_outcome() -> void:
 		_finish(0)
 	elif own_alive == 0:
 		_finish(1)
-	elif elapsed >= time_limit_seconds() * HARD_STOP_MULT:
+	elif not no_timeout and elapsed >= time_limit_seconds() * HARD_STOP_MULT:
 		# ★ 2026-10-01（第二次改）：**取消超时判负**。
 		#
 		#   用户原话：「自走棋就该在时限内战斗，直到被击毁」
@@ -1716,6 +1734,11 @@ func _check_outcome() -> void:
 		#
 		# ⚠️ 判定用 `elapsed`（秒），**不用 tick** —— tick 按帧累加，
 		#    帧率一变就和顶条对不上（这正是本次修的那个 bug）。
+		#
+		# ★ 2026-11-07（新手模式）：`no_timeout` 时这道安全网**整个不生效**
+		#   —— 用户口径是「只有战场上分出胜负才会结束」。此时收敛仍由
+		#   火力渐增保证（`damage_multiplier` 超时后继续涨到 20 倍封顶），
+		#   所以不会出现"永远打不完"。
 		_log(&"system", "僵持过久 —— 按剩余战力判定收场")
 		var own_hp := _total_hp_of_team(0)
 		var foe_hp := _total_hp_of_team(1)

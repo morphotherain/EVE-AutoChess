@@ -3,22 +3,21 @@ class_name EveIntroScene
 ## ★ 字号缩放（2026-10-07）：只动字、不动版面（见 eve_font.gd）
 const FONT := preload("res://scripts/ui/eve_font.gd")
 
-## 「守卫边境」开场 —— 视频背景 + 对话层 + 信标展开，最后进对局。
+## 「守卫边境」开场 —— 两段视频 + 对话层，最后进对局。
 ##
 ## ★ 三层彻底分开（这是「上一步 / 暂停 / 跳过」能真正工作的前提）：
-##   ① 背景  `VideoStreamPlayer` —— `mouse_filter = IGNORE`，只播画面与声音
-##   ② 对话  `EveIntroOverlay`  —— 实时绘制的 Control，三个按钮是真 Button
-##   ③ 信标  `SubViewport`(3D)   —— 末句（没有视频的那一段）接上展开动画
+##   ① 背景  `VideoStreamPlayer`（BgVideo）   —— `mouse_filter = IGNORE`，只播画面
+##   ② 末段  `VideoStreamPlayer`（BeaconVideo）—— 信标展开视频，叠在①上面
+##   ③ 对话  `EveIntroOverlay`                —— 实时绘制的 Control，按钮是真 Button
 ##   ⛔ 绝不把 UI 烘进视频 —— 那样三个按钮只是画面上的方块，点不动。
 ##
 ## ★ 时间真源是**本脚本的 `_t`**，不是视频的播放位置。
-##   理由：末句超出了视频长度（视频 23.104s / 时间轴到 25.6s），
-##   拿视频当钟会在末段冻结；而且无头环境下视频根本不推进，
-##   以它为准的话验收就全废了。视频只负责「按指令播 / 停 / 跳」。
+##   理由：末句超出了第一段视频长度（视频 23.104s / 台词到 24.27s），拿视频当钟
+##   会在末段冻结；而且无头环境下视频根本不推进，以它为准的话验收就全废了。
+##   视频只负责「按指令播 / 停 / 跳」。
 
 const SCRIPT := preload("res://scripts/data/eve_intro_script.gd")
 const PROGRESS := preload("res://scripts/core/eve_progress_store.gd")
-const BEACON := preload("res://scripts/visual/eve_cyno_beacon.gd")
 const OVERLAY := preload("res://scripts/ui/eve_intro_overlay.gd")
 
 const BATTLE_SCENE := "res://scenes/battle_scene.tscn"
@@ -30,7 +29,7 @@ var next_scene := BATTLE_SCENE
 
 ## 片头段结束 → 对话层淡入的时长（秒）。硬切会"啪"一下跳出来。
 const RAMP := 0.35
-const FADE_3D := 0.45               ## 视频 → 3D 的交叉淡入
+const FADE_3D := 0.45               ## 第一段 → 第二段视频的交叉淡入
 
 ## 末段的任务提示（⚠️ 最小版：完整的「任务方框 + 星币教学」还没做）
 const TASK_TEXT := "守卫移动式诱导信标 · 共计 15 回合（含事件回合）"
@@ -38,15 +37,14 @@ const TASK_TEXT := "守卫移动式诱导信标 · 共计 15 回合（含事件�
 var _lines: Array = []
 
 var _video: VideoStreamPlayer
-var _vp_cont: SubViewportContainer
-var _viewport: SubViewport
-var _beacon: Variant                    ## EveCynoBeacon（用 Variant 才能直接调它的 unfold）
+var _video2: VideoStreamPlayer      ## 信标展开视频（末段）
 var _overlay: EveIntroOverlay
 
 var _t := 0.0
 var _paused := false
 var _line_idx := -2                  ## −2 = 还没评估过；−1 = 无当前句（片头）
-var _beacon_started := false
+var _video2_started := false
+var _cinematic := false              ## 末段视频期间：整层让位，只留「跳过对话」
 var _prompted := false
 var _done := false
 
@@ -59,15 +57,15 @@ func _ready() -> void:
 	if size == Vector2.ZERO:
 		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_video()
-	_build_3d()
+	_build_video2()
 	_build_overlay()
 
 	_lines = SCRIPT.build()
 	_overlay.bind_lines(_lines)
 	_t = 0.0
 	_sync_line(true)
-	print("[开场] 共 %d 句 · 总长 %.2fs（其中信标段 %.2f–%.2f）"
-			% [_lines.size(), SCRIPT.total(), SCRIPT.BEACON_IN, SCRIPT.PROMPT_AT])
+	print("[开场] 共 %d 句 · 总长 %.2fs（末段信标视频 %.2f–%.2f，提示 %.2f）"
+			% [_lines.size(), SCRIPT.total(), SCRIPT.VIDEO2_IN, SCRIPT.PROMPT_AT, SCRIPT.PROMPT_AT])
 
 
 # ── ① 背景视频 ───────────────────────────────────────────
@@ -88,44 +86,23 @@ func _build_video() -> void:
 		_video.play()          # `autoplay` 之外再显式叫一次，两种触发都不落空
 
 
-# ── ③ 信标 3D 层（先隐藏，末段才淡入）────────────────────
-func _build_3d() -> void:
-	_vp_cont = SubViewportContainer.new()
-	_vp_cont.name = "BeaconLayer"
-	_vp_cont.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_vp_cont.stretch = true
-	_vp_cont.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_vp_cont.modulate = Color(1, 1, 1, 0)                  # 初始全透明
-	add_child(_vp_cont)
-
-	_viewport = SubViewport.new()
-	_viewport.name = "BeaconViewport"
-	_viewport.size = Vector2i(1920, 1080)
-	_viewport.transparent_bg = false
-	_viewport.own_world_3d = true                          # 自带 Environment 必须独立世界
-	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	_vp_cont.add_child(_viewport)
-
-	_beacon = BEACON.new()
-	_viewport.add_child(_beacon)
-
-	var cam := Camera3D.new()
-	cam.name = "Cam"
-	cam.fov = 32.0
-	cam.near = 1.0
-	cam.far = 4000.0
-	var d := 292.0                                          # 由展开后半展 82 m 反算
-	var az := deg_to_rad(38.0)
-	var el := deg_to_rad(32.0)
-	var look := Vector3(0, 6.0, 0)
-	_viewport.add_child(cam)                                # ⚠️ 必须先入树，look_at 才可用
-	# ⛔ 不能先 look_at 再 add_child —— 会报 "Node not inside tree"
-	cam.look_at_from_position(
-			look + Vector3(sin(az) * cos(el), sin(el), cos(az) * cos(el)) * d,
-			look, Vector3.UP)
+# ── ② 末段视频（信标展开）—— 先隐藏，到点才淡入并播放 ─────────
+func _build_video2() -> void:
+	_video2 = VideoStreamPlayer.new()
+	_video2.name = "BeaconVideo"
+	_video2.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_video2.expand = true
+	_video2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_video2.autoplay = false                     # 由时间轴 `VIDEO2_IN` 触发
+	_video2.visible = false
+	_video2.modulate = Color(1, 1, 1, 0)         # 初始全透明
+	_video2.stream = load(SCRIPT.VIDEO2)
+	if _video2.stream == null:
+		push_warning("[开场] 载不到信标视频 %s —— 末段会只剩背景最后一帧" % SCRIPT.VIDEO2)
+	add_child(_video2)
 
 
-# ── ② 对话层 ─────────────────────────────────────────────
+# ── ③ 对话层 ─────────────────────────────────────────────
 func _build_overlay() -> void:
 	_overlay = OVERLAY.new()
 	add_child(_overlay)
@@ -144,17 +121,27 @@ func _process(delta: float) -> void:
 		_t += delta
 	_update_video()
 	_sync_line(false)
-	_update_beacon()
+	_update_beacon_video()
 	_update_ramp()
 
 
-## 视频：到点播 / 到点停。末段超出视频长度 ⇒ 停在最后一帧，后面交给 3D。
+## 两段视频：第一段播完停在最后一帧；到点淡入第二段并开始播放。
 func _update_video() -> void:
-	if _video.stream == null:
+	if _video.stream != null and _t >= SCRIPT.VIDEO_LEN and not _video.paused:
+		_video.paused = true             # 停在最后一帧，作为第二段淡入时的底
+
+	if _video2 == null or _video2.stream == null:
 		return
-	if _t >= SCRIPT.VIDEO_LEN and not _video.paused:
-		_video.paused = true
-		_video.modulate.a = 0.0          # 视频让位给信标（末句没有视频）
+	if _t < SCRIPT.VIDEO2_IN:
+		_video2.visible = false
+		_video2.modulate.a = 0.0
+		return
+	if not _video2_started:
+		_video2_started = true
+		_video2.visible = true
+		_video2.play()
+		print("[开场] 信标视频开始（t=%.2f，时长 %.2fs）" % [_t, SCRIPT.VIDEO2_LEN])
+	_video2.modulate.a = clampf((_t - SCRIPT.VIDEO2_IN) / FADE_3D, 0.0, 1.0)
 
 
 ## 按 `_t` 找当前句；变了就换。片头段（没有台词）⇒ 整层不显示。
@@ -170,8 +157,8 @@ func _sync_line(force: bool) -> void:
 		if _t >= float(L["t0"]) and _t < float(L["t1"]):
 			idx = i
 			break
-	# 末段：超出最后一句 ⇒ 停在最后一句上（不再往下掉）
-	if idx < 0 and _t >= float(_lines[-1]["t1"]) and _t < SCRIPT.PROMPT_AT:
+	# 末句：超出它的 t1 但第二段视频还没开始 ⇒ 继续挂在屏幕上（别提前收掉）
+	if idx < 0 and _t >= float(_lines[-1]["t1"]) and _t < SCRIPT.VIDEO2_IN:
 		idx = _lines.size() - 1
 	if idx != _line_idx or force:
 		_line_idx = idx
@@ -197,20 +184,22 @@ func _update_ramp() -> void:
 	_overlay.modulate = Color(1, 1, 1, a)
 
 
-## 末段：3D 淡入 → 展开 → 出「▶ 进入边境」
-func _update_beacon() -> void:
-	if _t >= SCRIPT.BEACON_IN:
-		var k := clampf((_t - SCRIPT.BEACON_IN) / FADE_3D, 0.0, 1.0)
-		_vp_cont.modulate = Color(1, 1, 1, k)
-	if not _beacon_started and _t >= SCRIPT.BEACON_UNFOLD:
-		_beacon_started = true
-		_beacon.unfold(SCRIPT.UNFOLD_DUR)
-		print("[开场] 信标展开开始（t=%.2f，时长 %.2fs）" % [_t, SCRIPT.UNFOLD_DUR])
+## 末段：第二段视频播完 → 出「▶ 进入边境」。
+## ★ 视频期间整层让位（`set_cinematic`）：只留一个「跳过对话」按钮，
+##   这样 16 秒的镜头也能一键跳过 —— 不至于「点不动」。
+func _update_beacon_video() -> void:
+	if _t >= SCRIPT.VIDEO2_IN and not _cinematic and not _prompted:
+		_cinematic = true
+		_overlay.set_cinematic(true)
 	if not _prompted and _t >= SCRIPT.PROMPT_AT:
 		_prompted = true
+		_cinematic = false
+		if _video2 != null:
+			_video2.paused = true            # 停在传送门完全展开的最后一帧
+		_overlay.set_cinematic(false)
 		_overlay.show_task(TASK_TEXT)
 		_overlay.set_prompt(true)
-		print("[开场] 展开完成 → 等待「进入边境」")
+		print("[开场] 信标视频结束 → 等待「进入边境」")
 
 
 # ── 按钮 ─────────────────────────────────────────────────
@@ -229,12 +218,16 @@ func _on_prev() -> void:
 	var t0 := float(_lines[target_idx]["t0"])
 	print("[开场] 上一步 → 第 %d 句（t=%.2f）" % [target_idx + 1, t0])
 	_t = t0
-	_beacon_started = false
+	_video2_started = false
+	_cinematic = false
 	_prompted = false
 	_overlay.set_prompt(false)
-	_beacon.stop_unfold()                    # ★ 先掐掉动画，否则它下一帧就把进度写回去
-	_beacon.set_progress(0.0)
-	_vp_cont.modulate = Color(1, 1, 1, 0)
+	_overlay.set_cinematic(false)
+	if _video2 != null:
+		_video2.visible = false
+		_video2.paused = true
+		_video2.modulate.a = 0.0
+		_video2.stream_position = 0.0
 	if _video.stream != null:
 		_video.modulate.a = 1.0
 		_video.paused = false
@@ -249,6 +242,8 @@ func _on_pause(on: bool) -> void:
 	_overlay.set_paused(on)
 	if _video.stream != null and not (_t >= SCRIPT.VIDEO_LEN):
 		_video.paused = on or _t >= SCRIPT.VIDEO_LEN
+	if _video2 != null and _video2_started and not _prompted:
+		_video2.paused = on
 	print("[开场] %s（t=%.2f）" % ["暂停" if on else "继续", _t])
 
 
@@ -256,20 +251,29 @@ func _on_line_skipped() -> void:
 	_overlay.reveal_all()
 
 
-## 「跳过对话」：跳过**整段对话** → 直接进末段（信标展开 + 任务提示）。
+## 「跳过对话」：跳过整段对话 → 末段（信标视频收尾 + 任务提示）。
 ##
 ## ⚠️ 不要再让它直接退对局了 —— 名字改了语义就得跟着改。
 ##    用户原话：「我以为点跳过是跳过当前对话，原来不是哦」。
 ##    按钮写「跳过对话」却把人送出开场，那就是同一类谎话。
 ##    要离开开场，用末段的「▶ 进入边境」。
+##
+## ★ 2026-11-02 用户反馈：「点击跳过对话总是卡，没到最后根本跳过不了」。
+##   原来这里只 `seek(BEACON_IN)`（落在末段**起点**），还得干等 2.3 s 才出提示、
+##   再点一次才进边境 ⇒ 看起来就像"没反应"。现在落点是 `SKIP_TO`
+##   （只差 RAMP 就到提示），并且**再点一次立刻到提示**，不再原地重播。
 func _on_skip_talk() -> void:
 	if _done:
 		return
 	if _prompted:
 		_finish("进入边境")            # 末段时这个按钮已经写的是「▶ 进入边境」
 		return
-	print("[开场] 跳过对话 → 末段（t=%.2f）" % SCRIPT.BEACON_IN)
-	seek(SCRIPT.BEACON_IN)
+	if _t >= SCRIPT.SKIP_TO:
+		print("[开场] 跳过对话（已在末段尾）→ 任务提示")
+		seek(SCRIPT.PROMPT_AT)
+		return
+	print("[开场] 跳过对话 → 末段尾（t=%.2f）" % SCRIPT.SKIP_TO)
+	seek(SCRIPT.SKIP_TO)
 
 
 ## 「下一步 ▸」：当前句没显示完 ⇒ 先补全；已显示完 ⇒ 跳下一句；最后一句 ⇒ 进末段。
@@ -320,35 +324,48 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## 跳到时间 t（探针与自检用）。
 ## ★ 这是个**纯粹按 t 求值的函数**：调用后画面状态只由 t 决定，与"之前播过什么"无关。
-##   所以这里**不用 Tween**（Tween 是给实时播放用的），而是直接把信标进度算出来。
-##   ⚠️ 必须先 `stop_unfold()` 掐掉可能在跑的动画，否则它下一帧就把进度写回去。
+##   两段视频、对话层、任务提示全部按 t 直接摆好（所以这里不用 Tween）。
 func seek(t: float) -> void:
 	_t = t
 
-	# 视频：跳到对应帧（不然出的是"时间轴在第 10 秒、画面还在第 1 帧"的错位图）
+	# 第一段视频：跳到对应帧（不然出的是"时间轴在第 10 秒、画面还在第 1 帧"的错位图）
 	if _video != null and _video.stream != null:
 		_video.stream_position = clampf(t, 0.0, SCRIPT.VIDEO_LEN - 0.05)
-		_video.modulate.a = 1.0 if t < SCRIPT.VIDEO_LEN else 0.0
+		_video.modulate.a = 1.0
+		_video.paused = t >= SCRIPT.VIDEO_LEN
 
-	# 信标 3D 层
-	_vp_cont.modulate = Color(1, 1, 1,
-			clampf((t - SCRIPT.BEACON_IN) / FADE_3D, 0.0, 1.0))
-	_beacon.stop_unfold()
-	if t < SCRIPT.BEACON_UNFOLD:
-		_beacon_started = false
-		_beacon.set_progress(0.0)
-	else:
-		_beacon_started = true
-		_beacon.set_progress(clampf((t - SCRIPT.BEACON_UNFOLD) / SCRIPT.UNFOLD_DUR, 0.0, 1.0))
+	# 第二段视频（信标展开）
+	var t2 := t - SCRIPT.VIDEO2_IN
+	if _video2 != null and _video2.stream != null:
+		if t2 < 0.0:
+			_video2_started = false
+			_video2.visible = false
+			_video2.paused = true
+			_video2.modulate.a = 0.0
+			_video2.stream_position = 0.0
+		else:
+			_video2_started = true
+			_video2.visible = true
+			_video2.modulate.a = clampf(t2 / FADE_3D, 0.0, 1.0)
+			# ⛔ 不能「先 paused 再 stream_position」—— 暂停态下解码器不刷新，
+			#    画面会停在上一帧（实测：跳到片尾却还显示片头的船）。
+			#    必须先 `play()` 再给 `stream_position`，否则 seek 不生效。
+			_video2.paused = false
+			_video2.play()
+			_video2.stream_position = clampf(t2, 0.0, SCRIPT.VIDEO2_LEN - 0.05)
+
+	# 末段形态：视频期间整层让位（只留「跳过对话」），出提示时恢复
+	_prompted = t >= SCRIPT.PROMPT_AT
+	_cinematic = not _prompted and t >= SCRIPT.VIDEO2_IN
+	_overlay.set_cinematic(_cinematic)
+	_overlay.set_prompt(_prompted)
 
 	# 台词（`_prompted` 为真时它会早退，不会覆盖下面要写的任务提示）
 	_sync_line(true)
 
 	# 任务提示（必须放在 `_sync_line` **之后**）
-	_prompted = t >= SCRIPT.PROMPT_AT
 	if _prompted:
 		_overlay.show_task(TASK_TEXT)
-	_overlay.set_prompt(_prompted)
 
 	_update_ramp()
 
@@ -361,8 +378,9 @@ func overlay_ref() -> EveIntroOverlay:
 	return _overlay
 
 
-func beacon_ref() -> Node:
-	return _beacon
+## 末段信标视频节点（自检用）
+func video2_ref() -> VideoStreamPlayer:
+	return _video2
 
 
 # ══════════════════════════════════════════════════════════════════

@@ -199,6 +199,12 @@ var _pending_event: StringName:
 ## 用来保证「一回合只弹一次事件面板」—— 选完会重入 `begin_prep()` 建队。
 var _v_event_round := 0
 
+## ★ 2026-11-07（新手模式）：入口弹框与「本次进入游戏已经问过」的标记。
+## ⚠️ `_novice_asked` 挡的是**局内重开**（R / 再来一局）：那是同一局游戏的延续，
+##    再问一次只是打扰；想换就回主菜单重新进关卡。
+var _novice_ask: EveConfirmDialog = null
+var _novice_asked := false
+
 var _ship_pick_cache: Array:
 	get:
 		return _prep_phase.ship_pick_cache
@@ -448,6 +454,9 @@ func _ready() -> void:
 	hud.start_battle_requested.connect(_on_start_battle_requested)
 	hud.settings_requested.connect(_settings_ctl.open)
 	hud.shop_buy_requested.connect(_on_shop_buy)
+	# ★ 2026-11-07：商店卡「第一下 = 看档案」（第二次点击才下单）。
+	# ⚠️ 少这一行 = 卡片亮金边、状态栏写「再点一次购买」，右上档案却一动不动。
+	hud.shop_preview_requested.connect(_on_shop_preview)
 	hud.shop_refresh_requested.connect(_on_shop_refresh)
 	hud.shop_levelup_requested.connect(_on_shop_levelup)
 	hud.shop_lock_toggled.connect(func(on: bool): run.set_shop_locked(on))
@@ -617,7 +626,70 @@ func _ready() -> void:
 	if _vawait_start:
 		_begin_versus_wait()
 	else:
+		_open_run_or_ask_novice()
+
+
+## ★ 2026-11-07（玩家反馈 · 用户定案）：正式进入任务关卡时问一次「新手模式」。
+##
+## 新手模式做什么（唯一真源 = `EveRunState.novice_mode` 的注释）：
+##   准备阶段不读秒、不自动开战、不会因为"没布阵"判负；
+##   战斗阶段不判超时，只有一方被打光才结束；
+##   结算页本来就要玩家点「继续」，天然不限时。
+##
+## ⚠️ 只在**真实会话**问（`RUN_STORE.session_active`）：40 多个探针 / 自检
+##    直接加载本场景，弹一个模态框会把它们整条流程卡死在第一帧。
+## ⚠️ 联机（`versus != null`）不问：那边整套回合时钟由 `EveMatchState.ROUND_TIME`
+##    驱动，关掉倒计时房间就永远不推进。
+## ⚠️ 问过就不再问（`_novice_asked`）：局内重开沿用上一局的选择。
+func _open_run_or_ask_novice() -> void:
+	if _novice_asked or versus != null or not RUN_STORE.session_active:
 		begin_prep()
+		return
+	_novice_asked = true
+	if _novice_ask == null:
+		_novice_ask = EveConfirmDialog.new()
+		_novice_ask.name = "NoviceAsk"
+		# ⚠️ 文案自带 `\n` 且每行都短：`EveConfirmDialog` 的文案行**不开 autowrap**
+		#    （原因见那个文件的顶注 ③：autowrap 在容器里会把最小宽度塌成一个字）。
+		_novice_ask.setup(
+				"新手模式",
+				"这一局要开新手模式吗？\n"
+				+ "开：取消所有倒计时，你决定何时开战\n"
+				+ "不开：按标准节奏（准备 30 秒 · 交战有时限）",
+				"开启新手模式", "标准节奏")
+		_novice_ask.confirmed.connect(_on_novice_chosen.bind(true))
+		_novice_ask.cancelled.connect(_on_novice_chosen.bind(false))
+		# ⚠️ 必须挂在 **HUD 根**（一个铺满视口的 Control）上，⛔ 不是场景根：
+		#    本场景根是 Node3D，Control 挂上去不参与 2D 布局（弹框会不可见）。
+		hud.add_child(_novice_ask)
+	# ⚠️ 等一帧再开：弹框按「铺满父级 + 居中」摆放，而 HUD 的尺寸是首帧排版
+	#    之后才定的 —— 同一帧 open 会按 0×0 居中，弹框跑到左上角。
+	await get_tree().process_frame
+	# ⚠️⚠️ 弹框期间顶条必须**先归零**：`CommandBar.time_left` 的默认值是 24 秒，
+	#    以前由 `begin_prep()` 立刻覆盖掉；现在开局被弹框挡了一下，那 24 秒会
+	#    照常走完并触发 `stage_timer_expired` ⇒ 玩家还在读弹框，`run.field` 是空的
+	#    ⇒ `forfeit_no_deploy()` 直接判负。这一行 + `_process` 里那条早退，
+	#    两道都要（只靠这一行的话，别的路径把时间设回去就又漏了）。
+	hud.set_stage(run.node_index, run.stage_label(), 0.0)
+	_novice_ask.open_dialog()
+
+
+## 弹框的出口（两个按钮都走这里）。
+func _on_novice_chosen(on: bool) -> void:
+	if run != null:
+		run.novice_mode = on
+	hud.append_log({"time": 0.0, "category": &"system",
+			"text": "新手模式：%s" % ("开启 —— 全程不限时，你说了算"
+					if on else "关闭 —— 标准节奏（准备 30 秒 / 交战有时限）")})
+	begin_prep()
+
+
+## 本局是否「全程不限时」。
+##
+## ⚠️ 联机再挡一次：`novice_mode` 在联机入口不会被置真（弹框根本不弹），
+##    这里把「万一存档串味」也关死 —— 联机关掉倒计时 = 房间永远停滞。
+func _untimed() -> bool:
+	return run != null and run.novice_mode and versus == null
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -785,7 +857,11 @@ func begin_prep() -> void:
 
 	# HUD
 	_refresh_run_ui()
-	hud.set_stage(run.node_index, run.stage_label(), PREP_SECONDS)
+	# ★ 2026-11-07（新手模式）：传 0 ⇒ 顶条**不读秒**，`tick()` 见到
+	#   `time_left <= 0` 就原地返回 ⇒ `_on_stage_timer_expired` 永不触发
+	#   ⇒ 不会自动开战、也不会因为"场上 0 艘"判负。玩家点「开战」才开打。
+	hud.set_stage(run.node_index, run.stage_label(),
+			0.0 if _untimed() else PREP_SECONDS)
 	# 阶段 C 收尾：节点进场字幕（4.2 秒后自己淡出，见 eve_entry_banner.gd）。
 	#
 	# ⚠️ 只有战斗类节点弹 —— 事件节点（4/10/14）的进场词已经是事件面板的引导语
@@ -804,9 +880,10 @@ func begin_prep() -> void:
 
 	hud.append_log({
 		"time": 0.0, "category": &"system",
-		"text": "节点 %d／%d · %s · 敌方「%s」%d 艘 · 时限 %ds" % [
+		"text": "节点 %d／%d · %s · 敌方「%s」%d 艘 · %s" % [
 			run.node_index, EveNodeTable.TOTAL, run.stage_label(),
-			run.enemy_comp_name(), run.enemy_comp_size(), int(run.battle_seconds()),
+			run.enemy_comp_name(), run.enemy_comp_size(),
+			"不限时" if _untimed() else "时限 %ds" % int(run.battle_seconds()),
 		],
 	})
 	hud.append_log({
@@ -1287,6 +1364,12 @@ func _enter_event_node() -> void:
 func _process(delta: float) -> void:
 	if run == null:
 		return
+	# ★ 2026-11-07（新手模式）：入口弹框还开着 = 这一局**还没开始**，什么都不推进。
+	#   ⚠️ 这是上面 `_open_run_or_ask_novice()` 里「把顶条归零」的第二道保险：
+	#      没有它，任何一条把 `time_left` 设回正数的路径都会在弹框期间跑完倒计时，
+	#      而那一刻 `run.field` 是空的 ⇒ 直接被判「未部署」。
+	if _novice_ask != null and _novice_ask.is_open():
+		return
 	# [versus] round clock runs in every phase (prep time counts too)
 	_versus_tick(delta)
 	_versus_net_tick()
@@ -1431,6 +1514,13 @@ func _refresh_run_ui() -> void:
 	# 消费者是结算页打捞区。场景这一侧不重复判一遍「有没有残骸」——
 	# 判据写两份必然分叉。
 	hud.set_salvage(run.salvage_info())
+	# ★ 2026-11-07（结算期卖船）：卖船会 `changed` ⇒ 这里必须把结算页的打捞区
+	#   重推一次 —— 否则玩家卖完船，结算页还写着旧的「持有 N 星币」，
+	#   会以为钱没到账（而残骸报价是按当前星币判的）。
+	#   ⚠️ 只在 RESOLVE 调：其它阶段 `result_window` 是收起的，推了也看不见，
+	#      白白重建一遍列表。
+	if run.phase == EveRunState.Phase.RESOLVE:
+		_refresh_salvage_area()
 	# 备战席立绘（2D，画在 EveBenchRail 的格子里）。
 	# ⚠️ 2026-09-23：入口从 arena.bench_stage.update_fleet 换成这里 ——
 	#    3D 备战层已停用（原因与回退方法见 EveBenchStage 头注释）。
@@ -1462,6 +1552,24 @@ func _on_phase_changed(phase: int) -> void:
 	#    玩家会当成「点了没反应 / 买了没到手」。
 	#    ⇒ 非准备阶段把整排卡压暗并停发请求。
 	hud.set_shop_buy_enabled(phase == EveRunState.Phase.PREP)
+
+	# ★ 2026-11-07（玩家反馈：「一回合结算时要能卖船，不然钱不够打捞」）：
+	#
+	#   能力本来就有（`EveRunState.can_sell()` 放行 PREP + RESOLVE，拖到商店即卖），
+	#   但**结算期玩家看不出来** —— 商店看起来只是"买不了"，没人会想到往那儿拖。
+	#   ⇒ 结算期把商店**常亮成出售区**（橙底 + 「拖到此处出售」），再加一行日志。
+	#
+	#   ⚠️ `bench=false` 是必须的：备战席轨道的出售态会把格子里的船**整块遮掉**
+	#      并写「拖到此处出售」，可它的落点判定是「撤回 / 换位」，出售区只有商店窗
+	#      —— 两处都亮橙就是在骗玩家（详见 `EveHudRoot.set_selling` 的注释）。
+	if versus == null:
+		# ⚠️ 写成「按阶段赋值」而不是「进 RESOLVE 时打开」：从 RESOLVE 直接收束到
+		#    ENDING（信标归零 / 通关）时不会经过 `begin_prep()`，只开不关的话
+		#    结局页背后会永远挂着一块橙色出售区。
+		hud.set_selling(phase == EveRunState.Phase.RESOLVE, false)
+	if phase == EveRunState.Phase.RESOLVE and versus == null:
+		hud.append_log({"time": 0.0, "category": &"hint",
+				"text": "钱不够打捞？把船拖到下方商店即可出售换星币（结算期有效）"})
 
 	# ── 阶段 D④：阶段环境音 + BGM 切换 ──
 	#
@@ -1612,6 +1720,28 @@ func _on_shop_buy(index: int) -> void:
 	if not bool(r.get("ok", false)):
 		hud.append_log({"time": 0.0, "category": &"hint",
 				"text": String(r.get("reason", "买不了"))})
+
+
+## 商店卡「第一下」→ 右上角舰船档案换成这艘船（**只读**，不扣钱）。
+##
+## ★ 2026-11-07（玩家反馈：「买船的时候，要能点开看属性」）：
+##   卡片上只有「攻 / 防」两个数，护盾 / 结构 / 武器 / 射程 / 羁绊全看不到，
+##   玩家只能先买下来再看 —— 买错了还得退。现在第一下看档案，第二下才下单。
+##
+## ⚠️ 用 `build_preview()` 现造一个**一次性** `EveShip`：报价是纯数据（和备战席
+##    的船一样没有 3D 实体），而档案窗只吃 `EveShip`。
+##    ⛔ 绝不能塞进 `_own_ships` —— 那会让它计进羁绊、还会被模拟器拿去打。
+func _on_shop_preview(index: int) -> void:
+	if run == null or run.phase != EveRunState.Phase.PREP:
+		return
+	if index < 0 or index >= run.offers.size():
+		return
+	var offer = run.offers[index]
+	if not (offer is Dictionary) or (offer as Dictionary).is_empty():
+		return
+	var preview: EveShip = _fleet.build_preview(offer)
+	if preview != null:
+		hud.show_ship(preview)
 
 
 func _on_shop_refresh() -> void:
@@ -1779,7 +1909,12 @@ func restart_run() -> void:
 	RUN_STORE.clear()
 	hud.clear_log()
 	hud.set_selling(false)
+	# ★ 2026-11-07：重开一局**沿用**上一局的新手模式（⛔ 不重新弹框）。
+	#   `start_run()` 是「新的一局的完整初始态」，它会把这个字段清回 false，
+	#   所以在这里显式把玩家的选择带过去。
+	var keep_novice := run.novice_mode
 	run.start_run()
+	run.novice_mode = keep_novice
 	begin_prep()
 
 

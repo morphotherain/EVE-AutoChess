@@ -12,6 +12,34 @@ const T := preload("res://scripts/core/eve_text.gd")
 ## 安卓线 · 设备指标采集（只读，不改布局）。桌面端不会写。
 const DI := preload("res://scripts/mobile/eve_device_info.gd")
 
+## ★ 2026-11-07 移动端性能档 + 崩溃取证（玩家端：荣耀平板 GT · 8+256）。
+##
+## [WHY] 玩家报告卡顿 + 频繁闪退。查下来的事实是：这台是
+##       天玑8350 · **Mali-G615 MC6** · **2800×1840（5.15 MP，1080p 的 2.49 倍）** · 最高 144Hz，
+##       而我们跑的是 Compatibility 渲染器 + 2×MSAA + FXAA + glow，并且
+##       **全工程没有一处 `Engine.max_fps`** ⇒ 系统给 120/144Hz 就照着画 5.15MP。
+##       Mali 这档 GPU 的 fill rate 吃不下「5.15MP × 120Hz × 2×MSAA」，结果是
+##       满载 → 发热 → 系统降频 → 更卡。60 帧足够，且给 glow / 粒子留出余量。
+## [SRC] docs/玩家反馈-荣耀平板GT卡顿闪退-2026-11-07.md
+const MOBILE_MAX_FPS := 60
+## 上次会话标记：**正常退出才删**。启动时它还在 = 上次没走完退出流程。
+const RUN_MARK := "user://run.flag"
+## 引擎文件日志，由 project.godot 的 `debug/file_logging/enable_file_logging` 打开。
+const LOG_PATH := "user://logs/godot.log"
+## 切后台那一刻的日志快照。
+## [PITFALL] 引擎在**任何 GDScript 执行之前**就按 WRITE 打开 godot.log（截断），
+##           所以崩溃当次的日志活不过重启 —— 只有这一刻抢下来的快照才是现场。
+const LOG_SNAPSHOT := "user://logs/last_session.log"
+
+## 上次启动是不是没走完退出流程（`EveReport` 读它决定要不要弹「发诊断信息」）。
+var had_unclean_exit := false
+## 上次会话的启动时间戳 —— 作为「这次的现场报过没」的标识，避免同一次崩溃反复追问。
+var unclean_ts := 0
+## 日志路径暴露成属性（而不是让 `EveReport` 去读本文件的常量）：
+## 跨脚本读常量在 GDScript 里不是常规写法，属性访问没有这个疑问。
+var log_path := LOG_PATH
+var log_snapshot_path := LOG_SNAPSHOT
+
 
 func _init() -> void:
 	T.apply_saved()
@@ -81,6 +109,102 @@ func _ready() -> void:
 		_apply_web_font()
 	if not OS.has_feature("mobile"):
 		return
+	# 性能档要在第一帧之前定下来，否则玩家先看到的就是掉帧的开头。
+	_apply_mobile_perf()
+	_check_last_session()
 	await get_tree().process_frame
 	await get_tree().process_frame
 	DI.write_report(get_tree())
+
+
+## 移动端性能档：封顶帧率 + 关掉两项最贵的全屏开销。
+##
+## [NOTE] 只对 `mobile` 生效。桌面 / 网页的 1920×1080 出图基线一个字节都不碰 ——
+##        那样会让历史验收图全部对不上。
+func _apply_mobile_perf() -> void:
+	Engine.max_fps = MOBILE_MAX_FPS
+	var vp := get_viewport()
+	if vp == null:
+		return
+	# [WHY] 2×MSAA 在 tiler GPU 上是一项纯带宽税，5.15MP 下是整套配置里最贵的一项。
+	#       这块屏 291 PPI、2800 像素宽，关掉之后锯齿肉眼几乎看不出。
+	vp.msaa_3d = Viewport.MSAA_DISABLED
+	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
+	print("[EveBoot] 移动端性能档 max_fps=%d msaa=off fxaa=off 窗口=%s"
+			% [MOBILE_MAX_FPS, str(DisplayServer.window_get_size())])
+
+
+## 上次是不是正常退出？不是就把快照尾部打到 logcat（没有上报通道前，这是唯一能人工读到的现场）。
+func _check_last_session() -> void:
+	if FileAccess.file_exists(RUN_MARK):
+		had_unclean_exit = true
+		unclean_ts = _read_mark()
+		print("[EveBoot] 上次未正常退出（切后台被系统回收 或 闪退）。快照尾部如下：")
+		_dump_snapshot_tail()
+	_write_mark()
+
+
+## 标记文件里存的是**本次启动的时间戳**（不是 0/1），这样上报端能分清
+## 「这是同一个现场已经问过了」还是「又崩了一次，该再问一次」。
+func _read_mark() -> int:
+	var f := FileAccess.open(RUN_MARK, FileAccess.READ)
+	if f == null:
+		return 0
+	var s := f.get_as_text().strip_edges()
+	f.close()
+	return int(s) if s.is_valid_int() else 0
+
+
+func _write_mark() -> void:
+	var f := FileAccess.open(RUN_MARK, FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_line(str(Time.get_unix_time_from_system()))
+	f.close()
+
+
+func _clear_mark() -> void:
+	if FileAccess.file_exists(RUN_MARK):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(RUN_MARK))
+
+
+## 把快照尾部 N 行打到 logcat。
+func _dump_snapshot_tail(lines: int = 40) -> void:
+	if not FileAccess.file_exists(LOG_SNAPSHOT):
+		print("[EveBoot] （没有快照：上次退出前没经过 PAUSED，或文件日志没开）")
+		return
+	var f := FileAccess.open(LOG_SNAPSHOT, FileAccess.READ)
+	if f == null:
+		return
+	var rows := f.get_as_text().split("\n")
+	f.close()
+	for i in range(maxi(0, rows.size() - lines), rows.size()):
+		print("[prev] ", rows[i])
+
+
+## 切后台瞬间抓一份日志快照（玩家"切出去再回来就闪退"这类问题，只有这里留得下证据）。
+func _snapshot_log() -> void:
+	if not FileAccess.file_exists(LOG_PATH):
+		return
+	var src := FileAccess.open(LOG_PATH, FileAccess.READ)
+	if src == null:
+		return
+	var data := src.get_buffer(src.get_length())
+	src.close()
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("user://logs"))
+	var dst := FileAccess.open(LOG_SNAPSHOT, FileAccess.WRITE)
+	if dst == null:
+		return
+	dst.store_buffer(data)
+	dst.close()
+
+
+func _notification(what: int) -> void:
+	if not OS.has_feature("mobile"):
+		return
+	match what:
+		NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT:
+			_snapshot_log()
+		NOTIFICATION_WM_CLOSE_REQUEST:
+			# 走完退出流程 = 正常退出，下次启动不该报"异常"。
+			_clear_mark()

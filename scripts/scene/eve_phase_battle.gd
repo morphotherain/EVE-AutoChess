@@ -138,6 +138,12 @@ func start() -> EveBattleSimulator:
 	sim.setup(own, enemy)
 	# ⚠️ 时限必须在 setup 之后设 —— setup 会把它重置回默认 180s
 	sim.set_time_limit(limit)
+	# ★ 2026-11-07（新手模式）：关掉「3 倍时限按剩余战力强制收场」这道安全网。
+	#   ⚠️ `set_time_limit()` **照常要调** —— 火力渐增的曲线基准是它；
+	#      不清零它、只关安全网，战斗才会「打到一方全灭为止」而不是"永远打不完"。
+	#      详见 `EveBattleSimulator.set_no_timeout()` 的注释。
+	var untimed := bool(_run.novice_mode)
+	sim.set_no_timeout(untimed)
 	# ★ 2026-10-23：敌方思考等级随难度档走（0~3）。只改选目标的打分，不改数值。
 	sim.set_ai_level(int(_run.difficulty_row().get("ai_level", 0)))
 	sim.unit_destroyed.connect(_on_unit_destroyed_cb)
@@ -155,8 +161,12 @@ func start() -> EveBattleSimulator:
 	sim.shot_fired.connect(_on_shot_fired_cb)
 
 	# 顶条的倒计时切成「战斗时限」
+	#
+	# ★ 2026-11-07（新手模式）：传 0 ⇒ 顶条不读秒（写「不限时」），
+	#   `_on_stage_timer_expired` 那条「时限归零判负」也就永远不会被触发。
 	_hud.set_stage(_run.node_index,
-			T.t("BATTLE_STAGE", "%s · 交战") % _run.stage_label(), limit)
+			T.t("BATTLE_STAGE", "%s · 交战") % _run.stage_label(),
+			0.0 if untimed else limit)
 
 	_logged_count = 0
 	sd_announced = false
@@ -221,8 +231,11 @@ func check_sudden_death() -> void:
 		return
 	if sim.damage_multiplier() > 1.0:
 		sd_announced = true
+		# ★ 2026-11-07：新手模式没有时限，"或时限归零"那句是假话 —— 换一条。
+		var untimed := bool(sim.no_timeout)
 		_hud.append_log({"time": sim.elapsed, "category": &"system",
-				"text": T.t("BATTLE_ESCALATE",
+				"text": "火力渐增 —— 伤害开始放大，直到一方被击毁（本局不判超时）" if untimed
+						else T.t("BATTLE_ESCALATE",
 						"火力渐增 —— 伤害开始放大，直到一方被击毁或时限归零")})
 
 

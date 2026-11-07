@@ -282,8 +282,8 @@ SHOP_BENCH,Bench %d / %d,备战席 %d / %d
 SHOP_SELL_HINT,Drag here to sell · ◆ refunded,拖到此处出售 · 返还 ◆
 DOSSIER_TITLE,Ship Dossier,舰船档案
 DOSSIER_EMPTY_H,Select a ship,点击舰船查看
-DOSSIER_EMPTY_P,"Battlefield / Bench
-click any one of them","战场 / 备战席
+DOSSIER_EMPTY_P,"Battlefield / Bench / Shop card
+click any one of them","战场 / 备战席 / 商店卡
 任一处点选即可"
 DOSSIER_NONE,None Selected,未选中
 DOSSIER_HP_SHIELD,Shield,护盾

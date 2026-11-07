@@ -407,10 +407,23 @@ func refresh() -> void:
 	_phase_label.add_theme_color_override("font_color",
 			[C_ACCENT, C_WARN, C_OK][ph])
 
-	_time_label.text = "%02d:%02d" % [int(time_left) / 60, int(time_left) % 60]
-	_ring.set("progress", clampf(
-			1.0 - time_left / maxf(0.001, time_total), 0.0, 1.0))
-	_ring.queue_redraw()
+	# ★ 2026-11-07（新手模式 / 事件节点）：`time_total <= 0` = **本阶段没有倒计时**。
+	#
+	#   [WHY] 以前一律按 `00:00` + 走满的环画 —— 新手模式的准备/交战阶段传的
+	#         正是 0，画出来读作「已经超时」，玩家会以为系统卡住了。
+	#         事件节点（本来就没有时限）也是同一副样子，顺手一起修。
+	#   ⚠️ 环收起后不留空：它和 `_time_label` 都在顶条的 `timer` 横向容器里。
+	var untimed := time_total <= 0.0
+	if _ring != null:
+		_ring.visible = not untimed
+	if untimed:
+		_time_label.text = "不限时"
+	else:
+		_time_label.text = "%02d:%02d" % [int(time_left) / 60, int(time_left) % 60]
+	if _ring != null:
+		_ring.set("progress", 0.0 if untimed
+				else clampf(1.0 - time_left / maxf(0.001, time_total), 0.0, 1.0))
+		_ring.queue_redraw()
 
 	for i in _dots.size():
 		var done := i < node_index - 1
