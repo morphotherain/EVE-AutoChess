@@ -1,0 +1,13 @@
+# hotfix 兼容性基线：**上一次发完整包时**的 autoload 列表。
+# 发完一次完整包（APK / Windows exe）后，用
+#   python tools/check_hotfix_safe.py --update-baseline
+# 刷新它。⛔ 手工往里加名字会让闸门失效。
+# 背景见 tools/check_hotfix_safe.py 文件头。
+#
+# ★ 本份 = b35（2026-11-01，玩家手上的完整包）的列表。
+#   ⚠️ 其中 MCPRuntimeProbe 已在 2026-10-12 从工程里摘掉，但玩家那个包里还有它。
+#      「多一项」不影响热更（pck 只叠加、不删除），所以留在基线里是对的。
+EveBoot
+EveAiBridge
+EveUpdater
+MCPRuntimeProbe

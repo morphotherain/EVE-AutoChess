@@ -12,7 +12,7 @@ config_version=5
 
 config/name="EVE 自走棋"
 config/description="EVE 题材 3D 自走棋 —— 无格子太空战场 + 漂浮窗口 HUD"
-config/version="0.14.10.5.39"
+config/version="0.14.10.5.40"
 run/main_scene="res://scenes/main_menu.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.png"
@@ -22,7 +22,6 @@ config/icon="res://icon.png"
 EveBoot="*res://scripts/core/eve_boot.gd"
 EveAiBridge="*res://scripts/core/eve_ai_bridge.gd"
 EveUpdater="*res://scripts/core/eve_updater.gd"
-EveReport="*res://scripts/core/eve_report.gd"
 
 [debug]
 

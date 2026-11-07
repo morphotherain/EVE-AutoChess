@@ -68,6 +68,29 @@ cat > "${PROJ}/build_info.json" <<EOF
 EOF
 
 rm -f "${PCK}"
+
+# ══════════════════════════════════════════════════════════════════
+#  ★★ 2026-11-07 事故闸门：证明这份 pck 挂到**最老的客户端**上不会黑屏
+# ══════════════════════════════════════════════════════════════════
+#  b39 就是这么炸的：新加了 autoload `EveReport`，主菜单里又直接写
+#  `EveReport.open_feedback()`。老客户端的 autoload 注册表里没有这个名字
+#  （引擎启动时就定死了，`load_resource_pack` 改不了），于是 GDScript 编译期
+#  报 `Parse Error: Identifier "EveReport" not declared` ⇒ 主菜单脚本加载失败
+#  ⇒ **整屏黑**。所有 b38 及以前的客户端全中。
+#
+#  ⇒ 这条闸门放在**导出之前**：不合规就别浪费一次导出。
+#  ⚠️ 它比对的是 `tools/hotfix_baseline.txt`（上一次发完整包时的 autoload 列表）。
+#     发完完整包记得 `python tools/check_hotfix_safe.py --update-baseline`。
+GATE_PY="${PYBIN:-C:/Users/Administrator/.workbuddy/binaries/python/envs/default/Scripts/python.exe}"
+[ -x "${GATE_PY}" ] || GATE_PY="python"
+if ! "${GATE_PY}" "${PROJ}/tools/check_hotfix_safe.py"; then
+  echo "" >&2
+  echo "✗ 兼容性闸门不通过 —— 这份 pck 会让老客户端黑屏，已拒绝发布。" >&2
+  echo "  背景：docs/事故-b39黑屏-2026-11-07.md" >&2
+  exit 1
+fi
+echo ""
+
 "${GODOT}" --headless --path "${PROJ}" --export-pack "Hotfix" "${PCK}" > /tmp/hotfix_pack.log 2>&1
 if [ ! -f "${PCK}" ]; then
   echo "✗ 打包失败：" >&2

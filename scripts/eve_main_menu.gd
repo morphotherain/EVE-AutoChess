@@ -330,6 +330,11 @@ var _codex: Control = null
 ## ★ 2026-10-30 热更状态行（版本号**上方**那行小字）。
 ##   ⚠️ 文本为空时整行隐藏 —— 平时玩家看到的还是干净的主界面，
 ##      只有「正在下载 / 已就绪重启生效 / 校验失败」时才有话说。
+## ★ 2026-11-07：诊断上报宿主（心跳 / 崩溃取证 / 手动反馈）。
+## ⛔⛔ **不许**写成 `EveReport.xxx` —— 它不是 autoload。见 `_boot_reporter()`。
+const REPORT_SCRIPT := preload("res://scripts/core/eve_report.gd")
+var _reporter: Node = null
+
 var _update_tag: Label = null
 ## ★ 2026-11-07（用户需求）：发现新版本时**主动弹窗问是否更新**。
 ##   ⚠️ 与 `_update_tag` 是两件事，别拿小字替代弹窗：
@@ -421,6 +426,78 @@ func _ready() -> void:
 	EveUpdater.mark_boot_ok()
 	# ★ 2026-11-07：接上「发现新版本」的询问链路（见 `_wire_updater`）。
 	_wire_updater()
+	# ★ 2026-11-07：诊断上报（心跳 / 崩溃取证 / 补发积压）。
+	#   放最后：界面全铺完了，才叫「这次启动是好的」⇒ 这一步写 stage=1。
+	_boot_reporter()
+
+
+## ══════════════════════════════════════════════════════════════════
+##  ★★ 热更的**根本约束**：autoload 节点永远是老脚本
+## ══════════════════════════════════════════════════════════════════
+##  `EveUpdater._init()` 里才调 `_try_mount()` 挂 pck，而 autoload 是按
+##  `project.godot` 的顺序逐个实例化的 ⇒ **在挂载之前就建好的节点，脚本永远是
+##  基础包里的那一版**。`EveBoot`（排第一）和 `EveUpdater`（排第三）都在此列。
+##
+##  ⇒ 老客户端挂上新 pck 之后：
+##      · 主菜单、战斗场景等**被 pck 覆盖**的脚本 = 新代码 ✅
+##      · autoload 实例 = **老代码** ❌
+##  ⇒ 新代码里访问 autoload 的**新增**成员 = 运行时错误
+##     （`Invalid get index 'pending_update'`），`_ready()` 当场中断，界面只建一半。
+##
+##  这不是推演，是 b39 事故的**另一半原因**（另一半是 `EveReport` 裸引用的
+##  Parse Error）。详见 `docs/事故-b39黑屏-2026-11-07.md`。
+##
+##  ⛔ 纪律：本文件里凡是访问 `EveUpdater` / `EveBoot` 的**新增**成员，
+##     一律先过 `_up_has()`。
+func _up_has(member: String) -> bool:
+	if EveUpdater == null:
+		return false
+	if EveUpdater.has_method(member) or EveUpdater.has_signal(member):
+		return true
+	# GDScript 没有 `has_property()`，只能扫属性表（只在启动时跑几次，不必优化）。
+	for p in EveUpdater.get_property_list():
+		if String(p.get("name", "")) == member:
+			return true
+	return false
+
+
+## ★ 2026-11-07：把诊断上报宿主挂到主菜单上。
+##
+## [WHY] 为什么是主菜单、不是 autoload —— 这是本次事故的核心教训：
+##   autoload 注册表在引擎启动时定死，`load_resource_pack()` **改不了它**
+##   （它只挂文件系统，不重读 project.binary、不重新注册 autoload）。
+##   ⇒ 任何「只存在于 autoload 里的新功能」对老客户端永远无效。
+##   主菜单脚本会被 pck 覆盖，所以把宿主放这里，热更才能激活它。
+##
+## [PITFALL] 第一版写的是 `EveReport.open_feedback()`（裸引用 autoload 名）。
+##   老客户端没有这个 autoload ⇒ 编译期 `Parse Error: Identifier "EveReport"
+##   not declared` ⇒ 整个脚本加载失败 ⇒ **黑屏**。⛔ 别再写回去。
+func _boot_reporter() -> void:
+	# 网页版跨域会被浏览器拦，没必要白跑一趟（`eve_report` 内部也会挡，双保险）。
+	if OS.has_feature("web"):
+		return
+	var rep := _ensure_reporter()
+	if rep == null:
+		return
+	if rep.has_method("start"):
+		rep.start()          # 异步：内部自己 await，⛔ 不要在这里 await 卡住启动
+	if rep.has_method("mark_ui_ready"):
+		rep.mark_ui_ready()
+
+
+func _ensure_reporter() -> Node:
+	if _reporter != null and is_instance_valid(_reporter):
+		return _reporter
+	# 万一哪天 `/root/EveReport` 又存在（比如未来重新注册成 autoload），复用它，
+	# 别建第二份 —— `eve_report.gd` 里还有 `static _started` 做最后一道去重。
+	var existing := get_node_or_null("/root/EveReport")
+	if existing != null:
+		_reporter = existing
+		return _reporter
+	_reporter = REPORT_SCRIPT.new()
+	_reporter.name = "EveReportRuntime"
+	add_child(_reporter)
+	return _reporter
 
 
 ## 把内容层摆到「基准区居中」的位置。
@@ -861,7 +938,12 @@ func _on_version_tag_input(ev: InputEvent) -> void:
 	elif ev is InputEventScreenTouch:
 		hit = ev.pressed
 	if hit:
-		EveReport.open_feedback()
+		# ⛔ 这里以前是 `EveReport.open_feedback()` —— 裸引用一个 autoload 名。
+		#    老客户端的 autoload 列表里没有它 ⇒ 编译期 Parse Error ⇒ 整屏黑。
+		#    改成运行时拿实例，见 `_ensure_reporter()`。
+		var rep := _ensure_reporter()
+		if rep != null and rep.has_method("open_feedback"):
+			rep.open_feedback()
 
 
 ## ★ 2026-10-10 主界面**右下角**版本号（显示 `V<application/config/version>`）。
@@ -968,6 +1050,15 @@ func _refresh_update_tag() -> void:
 ##     那时本菜单的 `_ready()` 未必执行到 —— 信号发出去没人接就是彻底丢了。
 ##     所以先连信号，再补读一次 `pending_update`；重复弹由 `_update_prompted` 拦。
 func _wire_updater() -> void:
+	# ⚠️⚠️ 这三项都是 2026-11-07 才加的，老客户端的 `EveUpdater` 节点（老脚本）上
+	#        根本不存在。直接访问 = 运行时错误 ⇒ `_ready()` 中断 ⇒ 界面建一半。
+	#        这就是 b39 黑屏的原因之二，见 `_up_has()` 上面的长注释。
+	#        ⛔ 别因为「反正新包都有」就删掉这段检查。
+	if not (_up_has("update_available") and _up_has("download_finished")
+			and _up_has("pending_update")):
+		# 老客户端：保持它原有的「静默自动下载」行为，不弹窗 —— 这是正确降级，
+		# 因为老版本本来就没有询问式热更。玩家照样能更新，只是看不到弹窗。
+		return
 	if not EveUpdater.update_available.is_connected(_on_update_available):
 		EveUpdater.update_available.connect(_on_update_available)
 	if not EveUpdater.download_finished.is_connected(_on_update_finished):
