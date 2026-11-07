@@ -82,9 +82,17 @@ fi
 #  ★ 不剥的话 5.68MB 在 4Mbps 上要 12 秒，而**老客户端下载超时只有 6 秒**
 #    （那个 bug 在 0.14.10 之后才修）⇒ 老客户端每次都下到一半被自己砍断。
 #  剥完 1.02MB = 2.2 秒，才对所有版本都成立。
+#
+#  ★ 2026-11-07 追加：连 `.godot/imported/` 一起剥（`--drop-prefix`）。
+#    那一坨是**导入产物**（.ctex 等），exclude_filter 里写了 `.godot/imported/*`
+#    同样无效（跟 icudt 一个毛病）。平时不算大，但只要开发机跑过截图类验证脚本，
+#    那些 png 即使后来删了、ctex 还留在 `.godot/imported/` 里，导出照打不误。
+#    实测这天热更包从 1.02MB 涨到 24.44MB，多出来的 23.34MB 全是这种孤儿。
+#    ⚠️ 只剥 `imported/`，别把整个 `.godot/` 剥了 —— 里面还有导出器要读的小文件。
 PYBIN="${PYBIN:-C:/Users/Administrator/.workbuddy/binaries/python/envs/default/Scripts/python.exe}"
 [ -x "${PYBIN}" ] || PYBIN="python"
-"${PYBIN}" "${PROJ}/tools/pck_strip.py" "${PCK}" "${PCK}.tmp" --list || {
+"${PYBIN}" "${PROJ}/tools/pck_strip.py" "${PCK}" "${PCK}.tmp" \
+  --drop-prefix ".godot/imported/" --list || {
   echo "✗ 热更包瘦身失败（见上）" >&2
   rm -f "${PCK}.tmp"
   exit 1

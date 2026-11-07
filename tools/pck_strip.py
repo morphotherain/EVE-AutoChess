@@ -23,9 +23,28 @@ exclude_filter 完全无效，照打不误）。
 
 ═══ 用法 ═══════════════════════════════════════════════════════
 
-    python tools/pck_strip.py <in.pck> <out.pck> [--drop a,b,c] [--list]
+    python tools/pck_strip.py <in.pck> <out.pck> [--drop a,b,c] [--drop-prefix p1,p2] [--list]
 
   默认 --drop = icudt_godot.dat,icon.png
+
+  `--drop`        按**文件名**精确匹配
+  `--drop-prefix` 按**路径前缀**匹配（例如 `.godot/imported/`）
+
+═══ 为什么需要 --drop-prefix（2026-11-07 加）══════════════════════
+
+热更包只该含 `scripts/` + `data/`，但导出时 `.godot/imported/` 下的
+**导入产物（.ctex 等）会被一起打进去**，而且这一项**写进 exclude_filter
+同样无效**（跟 icudt 一个毛病）。
+
+平时它不大，因为里面只有 assets 的导入缓存；但只要开发机跑过截图类验证脚本
+（`shot*.png` / `local_s0_3s.png` 之类），那些 png 哪怕后来被删掉，
+`.godot/imported/` 里的 ctex 仍然留着 —— 而且 Godot 导出**照打不误**。
+实测 2026-11-07：热更包从 1.02 MB 涨到 24.44 MB，多出来的 23.34 MB 全是这种孤儿。
+
+⇒ 按前缀整个剥掉 `.godot/imported/`。安全性：热更包本来就不含 assets，
+运行时那些 ctex 由基础包（APK/EXE）提供，`load_resource_pack` 是叠加语义，
+剥掉不会缺东西。⚠️ 别顺手把整个 `.godot/` 都剥了 —— 里面还有
+`global_script_class_cache.cfg` 之类导出器要读的小文件。
 
 ═══ 格式（Godot 4.7 实测，pack_version = 4）═══════════════════════
 
@@ -91,11 +110,15 @@ def main(argv):
         return 2
     src, dst = argv[1], argv[2]
     drop = set(DEFAULT_DROP)
+    drop_prefix = []
     show = False
     i = 3
     while i < len(argv):
         if argv[i] == "--drop" and i + 1 < len(argv):
             drop = {s.strip() for s in argv[i + 1].split(",") if s.strip()}
+            i += 2
+        elif argv[i] == "--drop-prefix" and i + 1 < len(argv):
+            drop_prefix = [s.strip() for s in argv[i + 1].split(",") if s.strip()]
             i += 2
         elif argv[i] == "--list":
             show = True
@@ -121,7 +144,8 @@ def main(argv):
 
     keep, gone = [], []
     for e in ents:
-        (gone if e["name"] in drop else keep).append(e)
+        hit = e["name"] in drop or any(e["name"].startswith(p) for p in drop_prefix)
+        (gone if hit else keep).append(e)
 
     out = bytearray(buf[:HEADER_LEN])
     # 数据区：按原顺序紧凑排列，起点仍是 file_base
