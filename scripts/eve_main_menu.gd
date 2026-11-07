@@ -336,17 +336,27 @@ const REPORT_SCRIPT := preload("res://scripts/core/eve_report.gd")
 var _reporter: Node = null
 
 var _update_tag: Label = null
-## ★ 2026-11-07（用户需求）：发现新版本时**主动弹窗问是否更新**。
-##   ⚠️ 与 `_update_tag` 是两件事，别拿小字替代弹窗：
-##      小字报的是**进度**（下载中 / 已就绪），弹窗问的是**决策**（下不下）。
-var _update_dialog: EveConfirmDialog = null
-## 弹窗当前在问什么：0 = 没在问 / 1 = 问要不要下载 / 2 = 问要不要重启。
-## ⚠️ 一个弹窗实例被**两次提问复用** ⇒ 必须靠这个字段区分 `confirmed` 该干什么。
-var _update_stage := 0
-## 本次运行是否已经问过。
-## ⚠️ 「稍后」**不持久化**（用户 2026-11-07 定：下次启动照样问）⇒ 纯内存标志，
-##    ⛔ 不要写进任何存档。它唯一的作用是拦住「信号 + 读字段」两条路的重复弹窗。
-var _update_prompted := false
+## ★ 2026-11-07（二版）：更新检查器 + 进度面板。
+##
+## ⛔⛔ **第一版的教训（b39 事故，别再重犯）**：那时把「检测/下载/进度」全放进
+##      `EveUpdater`（autoload），主菜单靠 `_up_has()` 查它的新成员再连信号。
+##      可 autoload 节点在 pck 挂载**之前**就实例化了，用的永远是基础包里的老脚本
+##      ⇒ 老客户端上三个成员全是 false ⇒ `_wire_updater()` 直接 return
+##      ⇒ **弹窗代码在真实玩家机器上一次都没跑过**。
+##
+## [WHY] 现在：检查器是本文件 `new()` 出来的普通 Node，自己读 build_info、自己拉
+##       清单、自己下载校验，**一个 `EveUpdater.xxx` 都不碰**。主菜单脚本会被 pck
+##       覆盖，所以这套逻辑以后可以靠热更改。
+const UPDATE_UI := preload("res://scripts/core/eve_update_ui.gd")
+const UPDATE_PANEL := preload("res://scripts/ui/eve_update_panel.gd")
+## ⚠️ 不标注类型（`Node` / `Control`）：它们各自有自定义方法（`show_ask` /
+##    `begin_download` …），标成基类会让静态检查在调用点报「不存在该方法」。
+var _upd = null
+var _upd_panel = null
+## 右下角小字要显示的内容。空 = 隐藏。
+## ⚠️ 自己维护，⛔ 不读 `EveUpdater.status_text` —— 老客户端那份只会报「静默下载」，
+##    而我们现在有更准的进度（包括「替老 EveUpdater 观察」的那种，见检查器）。
+var _upd_status := ""
 ## ★ 2026-11-01 鸣谢名单：版本号上方按钮 + 右侧独立面板。
 ##   ⚠️ 只建一次，之后靠 `visible` 切换（与版权声明面板同口径，避免闪烁 / 丢引用）。
 var _ack_panel: PanelContainer = null
@@ -424,8 +434,8 @@ func _ready() -> void:
 	#   ⚠️ 必须放在界面全部建完之后：前面任何一步崩掉都算「这次启动失败」，
 	#      计数留着才有意义（见 `EveUpdater` 的坏包三次自动回退）。
 	EveUpdater.mark_boot_ok()
-	# ★ 2026-11-07：接上「发现新版本」的询问链路（见 `_wire_updater`）。
-	_wire_updater()
+	# ★ 2026-11-07：更新检查 —— 等 1.5 秒再问，不打断开场动画（用户拍板）。
+	_start_update_check()
 	# ★ 2026-11-07：诊断上报（心跳 / 崩溃取证 / 补发积压）。
 	#   放最后：界面全铺完了，才叫「这次启动是好的」⇒ 这一步写 stage=1。
 	_boot_reporter()
@@ -449,6 +459,10 @@ func _ready() -> void:
 ##
 ##  ⛔ 纪律：本文件里凡是访问 `EveUpdater` / `EveBoot` 的**新增**成员，
 ##     一律先过 `_up_has()`。
+##
+##  ⚠️ 2026-11-07 二版之后**本文件已无调用点**（更新链路搬到了
+##     `eve_update_ui.gd`，那里一个 autoload 成员都不碰）。保留它是为了
+##     给下一个人一把随时可用的尺子 —— 真要访问新成员，别裸写。
 func _up_has(member: String) -> bool:
 	if EveUpdater == null:
 		return false
@@ -1021,142 +1035,139 @@ func _build_version_tag() -> void:
 	_ack_btn = ack_btn
 
 
-## 把热更状态同步到那一行小字。空文本 = 隐藏（绝大多数时候应该隐藏）。
+## 把更新状态同步到右下角那行小字。空文本 = 隐藏（绝大多数时候应该隐藏）。
+##
+## ⚠️ 数据源优先 `_upd_status`（本文件自己维护），⛔ 不是只读 `EveUpdater.status_text`：
+##    老客户端那份只会说「正在下载 N%」，而我们要报的还包括「替老 EveUpdater
+##    观察到的进度」与「已就绪 · 重启生效」。见 `_on_upd_progressed`。
+##    `EveUpdater.changed` 仍然驱动这里（连接在 `_build_version_tag`），两路都会刷新。
 func _refresh_update_tag() -> void:
 	if _update_tag == null:
 		return
-	var s := String(EveUpdater.status_text)
+	var s := _upd_status
+	if s == "":
+		s = String(EveUpdater.status_text)
 	_update_tag.text = s
 	_update_tag.visible = s != ""
 
 
 # ══════════════════════════════════════════════════════════════════
-#  ★ 2026-11-07（玩家需求）：发现新版本 → 主动弹窗问「要不要更新」
+#  ★ 2026-11-07：发现新版本 → 弹窗询问 → 进度条 → 重启生效
 # ══════════════════════════════════════════════════════════════════
 #
-#  设计口径（用户 2026-11-07 拍板，三条）：
+#  设计口径（用户 2026-11-07 拍板，三条，二版仍然适用）：
 #    ① 「稍后」= 本次不问，**下次启动再问**（不做「跳过此版本」的持久化记忆）
-#    ② 下载完 → 再弹一次，给「立即重启」
+#    ② 下载完 → 面板换成「已就绪」，给「立即重启」
 #    ③ 时机 = 主菜单铺好后约 1.5 秒（不打断开场动画）
 #
-#  ⚠️ 为什么 ②③ 不能用 `await create_timer()`：玩家完全可能在这 1.5 秒里
+#  ⚠️ 为什么延迟不能用 `await create_timer()`：玩家完全可能在这 1.5 秒里
 #     就点了「开始游戏」⇒ 本节点被 free ⇒ 协程恢复时打
 #     "Resumed function after await, but the object was freed" 的错。
 #     用本节点的子 Timer，跟着一起销毁，回调根本不会跑。
+#
+#  ⚠️ 为什么整套逻辑不放在 `EveUpdater` 里：见字段区 `UPDATE_UI` 上面的长注释。
+#     一句话 —— autoload 在 pck 挂载前就实例化，老客户端上永远是老脚本。
 
-## 接上热更器的广播。
-##
-## ⚠️⚠️ **信号 + 字段两条路都要**：`check()` 在 autoload 阶段（启动两帧后）就跑，
-##     那时本菜单的 `_ready()` 未必执行到 —— 信号发出去没人接就是彻底丢了。
-##     所以先连信号，再补读一次 `pending_update`；重复弹由 `_update_prompted` 拦。
-func _wire_updater() -> void:
-	# ⚠️⚠️ 这三项都是 2026-11-07 才加的，老客户端的 `EveUpdater` 节点（老脚本）上
-	#        根本不存在。直接访问 = 运行时错误 ⇒ `_ready()` 中断 ⇒ 界面建一半。
-	#        这就是 b39 黑屏的原因之二，见 `_up_has()` 上面的长注释。
-	#        ⛔ 别因为「反正新包都有」就删掉这段检查。
-	if not (_up_has("update_available") and _up_has("download_finished")
-			and _up_has("pending_update")):
-		# 老客户端：保持它原有的「静默自动下载」行为，不弹窗 —— 这是正确降级，
-		# 因为老版本本来就没有询问式热更。玩家照样能更新，只是看不到弹窗。
-		return
-	if not EveUpdater.update_available.is_connected(_on_update_available):
-		EveUpdater.update_available.connect(_on_update_available)
-	if not EveUpdater.download_finished.is_connected(_on_update_finished):
-		EveUpdater.download_finished.connect(_on_update_finished)
-	if not EveUpdater.pending_update.is_empty():
-		_on_update_available(EveUpdater.pending_update)
-
-
-func _on_update_available(info: Dictionary) -> void:
-	if _update_prompted:
-		return
-	_update_prompted = true
+## 1.5 秒后启动检查。用子 Timer，理由见上面第 3 条注释。
+func _start_update_check() -> void:
 	var t := Timer.new()
-	t.name = "UpdateAskDelay"
+	t.name = "UpdateCheckDelay"
 	t.one_shot = true
 	t.wait_time = 1.5
-	t.timeout.connect(_on_update_prompt.bind(info))
+	t.timeout.connect(_on_update_check_due)
 	add_child(t)
 	t.start()
 
 
-## 1.5 秒到了 —— 真的弹。
-func _on_update_prompt(info: Dictionary) -> void:
+func _on_update_check_due() -> void:
 	if not is_inside_tree():
 		return
-	var cur := String(EveUpdater.build_info().get("version", "?"))
-	var newv := String(info.get("version", "?"))
-	var mb := float(int(info.get("size", 0))) / 1048576.0
-	_update_stage = 1
-	var dlg := _ensure_update_dialog()
-	# ⚠️ `EveConfirmDialog` 的文案行**不开 autowrap**（原因见那个文件顶注 ③：
-	#    autowrap 进容器会把最小宽度塌成一个字）⇒ 每行必须短、且自带 `\n`。
-	dlg.setup(
-			"发现新版本",
-			"当前 V%s → 最新 V%s\n" % [cur, newv]
-			+ "更新包 %s（脚本与数值，不含美术）\n" % _size_text(mb)
-			+ "现在下载吗？",
-			"现在更新", "稍后")
-	dlg.open_dialog()
+	_upd = UPDATE_UI.new()
+	_upd.name = "UpdateCheck"
+	add_child(_upd)
+	_upd.asked.connect(_on_upd_asked)
+	_upd.progressed.connect(_on_upd_progressed)
+	_upd.ready_to_restart.connect(_on_upd_ready)
+	_upd.failed.connect(_on_upd_failed)
+	_upd.start()
 
 
-static func _size_text(mb: float) -> String:
-	if mb <= 0.0:
-		return "体积未知"
-	return "%.2f MB" % mb
-
-
-## 下载结束（成功 / 失败都走这里）。
+## 面板建一次、四态复用（⛔ 不要每次 new 一个，会叠出多张遮罩）。
 ##
-## ⚠️ 失败**不弹框**：只在右下角那行小字说一句（`changed` 驱动
-##    `_refresh_update_tag`）。网络差是常态，为它糊一个模态框属于添乱。
-func _on_update_finished(ok: bool, version: String) -> void:
-	if not ok or not is_inside_tree():
+## ⚠️ 挂在**根节点**上，⛔ 不挂 `_content`：`_content` 是 1920×1080 的居中基准区，
+##    非 16:9 时四周有黑边，弹窗会被裁进那个内容框里，看着像贴了张纸。
+##
+## ⚠️ 返回类型与字段都不标注（`Control` / `Node`）—— 面板和检查器都有自己的
+##    方法（`show_ask` / `begin_download` …），标成基类反而调不通。
+func _ensure_update_panel():
+	if _upd_panel == null:
+		_upd_panel = UPDATE_PANEL.new()
+		_upd_panel.name = "UpdatePanel"
+		add_child(_upd_panel)
+		_upd_panel.accepted.connect(_on_upd_accepted)
+		_upd_panel.dismissed.connect(_on_upd_dismissed)
+		_upd_panel.restart_now.connect(_on_upd_restart)
+		_upd_panel.retry_requested.connect(_on_upd_retry)
+	return _upd_panel
+
+
+# ── 检查器回调 ─────────────────────────────────────────────────────
+
+func _on_upd_asked(cur: String, new_ver: String, size_mb: float) -> void:
+	if not is_inside_tree():
 		return
-	var v := version
-	if v == "":
-		v = String(EveUpdater.pending_update.get("version", "新版本"))
-	_update_stage = 2
-	var dlg := _ensure_update_dialog()
-	dlg.setup(
-			"更新已就绪",
-			"V%s 已下载完成。\n重启游戏后生效，现在重启吗？" % v,
-			"立即重启", "稍后")
-	dlg.open_dialog()
+	_upd_status = "发现新版本 V%s" % new_ver
+	_refresh_update_tag()
+	_ensure_update_panel().show_ask(cur, new_ver, size_mb)
 
 
-## 建一次、之后复用。
-##
-## ⚠️ 挂在**根节点**（铺满视口的 Control）上，⛔ 不挂 `_content`：
-##    `_content` 是 1920×1080 的居中基准区，非 16:9 时四周有黑边，
-##    弹窗会跟着被裁进那个内容框里，看着像贴了张纸。
-func _ensure_update_dialog() -> EveConfirmDialog:
-	if _update_dialog == null:
-		_update_dialog = EveConfirmDialog.new()
-		_update_dialog.name = "UpdateDialog"
-		add_child(_update_dialog)
-		_update_dialog.confirmed.connect(_on_update_confirmed)
-		_update_dialog.cancelled.connect(_on_update_cancelled)
-	return _update_dialog
+func _on_upd_accepted() -> void:
+	if _upd != null:
+		_upd.begin_download()
 
 
-func _on_update_confirmed() -> void:
-	var stage := _update_stage
-	_update_stage = 0
-	if _update_dialog != null:
-		_update_dialog.close_dialog()
-	match stage:
-		1:
-			# 「现在更新」→ 后台下载。进度走右下角小字，不再弹框。
-			EveUpdater.download_update()
-		2:
-			EveUpdater.restart_app()
+func _on_upd_progressed(pct: float, done: int, total: int, allow_dismiss: bool) -> void:
+	if not is_inside_tree() or _upd == null:
+		return
+	var p = _ensure_update_panel()
+	# 首次进度可能是「观察老 EveUpdater 下载」来的（面板还没开过）⇒ 补一次 show_progress
+	if not p.is_open():
+		p.show_progress(String(_upd.cur_ver), String(_upd.new_ver), allow_dismiss)
+	p.set_progress(pct, done, total)
+	_upd_status = "正在下载更新 %d%%" % int(round(pct * 100.0))
+	_refresh_update_tag()
 
 
-func _on_update_cancelled() -> void:
-	_update_stage = 0
-	if _update_dialog != null:
-		_update_dialog.close_dialog()
+func _on_upd_ready(ver: String) -> void:
+	if not is_inside_tree():
+		return
+	_upd_status = "V%s 已就绪 · 重启生效" % ver
+	_refresh_update_tag()
+	_ensure_update_panel().show_ready(ver)
+
+
+func _on_upd_failed(msg: String, cur: String, new_ver: String) -> void:
+	if not is_inside_tree():
+		return
+	_upd_status = ""
+	_refresh_update_tag()
+	_ensure_update_panel().show_error(msg, cur, new_ver)
+
+
+## 「稍后」= 本次不问，下次启动再问（用户拍板）。⛔ 不写任何持久化标记。
+func _on_upd_dismissed() -> void:
+	_upd_status = ""
+	_refresh_update_tag()
+
+
+func _on_upd_restart() -> void:
+	if _upd != null:
+		_upd.restart_app()
+
+
+func _on_upd_retry() -> void:
+	if _upd != null:
+		_upd.begin_download()
 
 
 ## 「鸣谢名单」按钮：开 / 关同一扇面板。打开时把版权声明面板与难度卡片区让位收掉，避免盖住面板。

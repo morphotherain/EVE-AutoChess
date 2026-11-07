@@ -95,12 +95,20 @@ func _check_static() -> void:
 	for h in boot_hits:
 		print("      ✗ 仍在引用：", h)
 
-	# ④ 主菜单访问 EveUpdater 新成员前必须过 _up_has
+	# ④ 主菜单不许再访问 EveUpdater 的新成员
+	#    [WHY] 2026-11-07 二版：更新链路整体搬到 `eve_update_ui.gd`（主菜单 `new()`
+	#          出来的普通 Node）。主菜单不再连 autoload 的信号 —— 那条路在老客户端
+	#          上是死的（节点用老脚本，成员根本不存在）。
 	var menu := _strip_comments(_read(MENU_FILE))
-	_ok(menu.contains("func _up_has("),
-			"④ 主菜单有 `_up_has()` 存在性检查（autoload 节点是老脚本）")
-	_ok(menu.contains("_up_has(\"update_available\")"),
-			"④ `_wire_updater()` 用 `_up_has` 挡住了新信号")
+	var up_hits: Array = []
+	for bad in ["EveUpdater.update_available", "EveUpdater.download_finished",
+			"EveUpdater.pending_update", "EveUpdater.download_update"]:
+		if menu.contains(bad):
+			up_hits.append(bad)
+	_ok(up_hits.is_empty(),
+			"④ 主菜单不再访问 EveUpdater 的新成员（改走 eve_update_ui.gd）")
+	for h in up_hits:
+		print("      ✗ 仍在引用：", h)
 
 	# ⑤ 上报器保留 static 去重（主菜单 + autoload 两条路会打架）
 	_ok(rep.contains("static var _started"),
