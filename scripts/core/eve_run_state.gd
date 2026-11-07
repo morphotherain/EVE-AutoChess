@@ -1872,6 +1872,15 @@ static func _merge_buffs_into(dst: Dictionary, src) -> void:
 #    本类只回答「这一步允许吗、编制怎么变」。
 
 ## 拿起备战席第 index 艘，放到棋盘的 (row, col) 格。
+##
+## ★★ 2026-11-07（玩家要求）：「拖到已有船的格子」不再被拒，而是**互换**。
+##    玩家原话：「棋盘上的船需要能互换位子，现在需要三个步骤去调位子，太过于麻烦。
+##    比如鲲鹏想跟死亡旋涡换位子，目前只能先把鲲鹏丢一边，然后移动死亡旋涡去
+##    原来鲲鹏的位子，最后再让鲲鹏去原来死亡旋涡的位子。」
+##
+##    口径（与云顶一致）：备战席那艘进场，**被顶掉的那艘回它腾出来的那个备战席格**
+##    ⇒ 上场数、备战席数都不变，所以：① 不受 `field_limit()` 限制
+##      ② 不需要「备战席有没有空位」这个前提（永远够）。
 func deploy_from_bench(bench_index: int, row: int, col: int) -> Dictionary:
 	if phase != Phase.PREP:
 		return _deny("只有准备阶段能布阵")
@@ -1879,11 +1888,29 @@ func deploy_from_bench(bench_index: int, row: int, col: int) -> Dictionary:
 		return _deny("这一格是空的")
 	if not _cell_ok(row, col):
 		return _deny("只能放在我方部署区（棋盘下 4 行）")
+
+	# ── 落点有人 ⇒ 互换（先判这个，因为它要跳过上场位上限）──────────────
+	var occ := field_index_at(row, col)
+	if occ >= 0:
+		var e0: Dictionary = bench[bench_index]
+		var other: Dictionary = field[occ]
+		var other_name := entry_name(other)
+		var other_star := int(other.get("star", 1))
+		e0["cell"] = Vector2i(row, col)
+		other["cell"] = Vector2i(-1, -1)
+		# ⚠️ 先动 `cell` 再换位：`field[occ] = e0` 之后 `other` 已经不在 field 里，
+		#    但它是同一个 Dictionary 引用，改 cell 仍然生效。
+		field[occ] = e0
+		bench[bench_index] = other
+		log_event.emit("互换：%s★%d 上场 → 第 %d 行第 %d 列，%s★%d 回备战席" % [
+				entry_name(e0), int(e0.get("star", 1)), row + 1, col + 1,
+				other_name, other_star], &"deploy")
+		changed.emit()
+		return {"ok": true, "reason": "", "data": {"swap": true}}
+
 	if field.size() >= field_limit():
 		return _deny("上场已满 %d／%d —— 先把场上一艘拖回备战席（或出售）"
 				% [field.size(), field_limit()])
-	if _cell_taken(row, col, -1):
-		return _deny("这一格已经有船了")
 
 	var e: Dictionary = bench[bench_index]
 	e["cell"] = Vector2i(row, col)
@@ -1898,6 +1925,11 @@ func deploy_from_bench(bench_index: int, row: int, col: int) -> Dictionary:
 
 
 ## 把场上第 index 艘挪到棋盘的 (row, col) 格
+##
+## ★★ 2026-11-07：落点已有船 ⇒ **两艘互换格子**（原因见 `deploy_from_bench`）。
+##    ⚠️ 前提是**这两艘都有真实格号**。「没有格号」（`cell = (-1,-1)`，走默认阵型
+##    自动摆位的那种）没法定义「换到哪」，这种数据形态只可能来自老存档，
+##    此时退回原行为（拒绝），不去猜。
 func move_field(field_index: int, row: int, col: int) -> Dictionary:
 	if phase != Phase.PREP:
 		return _deny("只有准备阶段能布阵")
@@ -1905,8 +1937,18 @@ func move_field(field_index: int, row: int, col: int) -> Dictionary:
 		return _deny("这一格是空的")
 	if not _cell_ok(row, col):
 		return _deny("只能放在我方部署区（棋盘下 4 行）")
-	if _cell_taken(row, col, field_index):
-		return _deny("这一格已经有船了")
+	var occ := field_index_at(row, col)
+	if occ >= 0 and occ != field_index:
+		var mine = field[field_index].get("cell", Vector2i(-1, -1))
+		if not (mine is Vector2i) or mine.x < 0:
+			return _deny("这一格已经有船了")
+		var a_name := entry_name(field[field_index])
+		var b_name := entry_name(field[occ])
+		field[field_index]["cell"] = Vector2i(row, col)
+		field[occ]["cell"] = mine
+		log_event.emit("互换：%s ↔ %s" % [a_name, b_name], &"deploy")
+		changed.emit()
+		return {"ok": true, "reason": "", "data": {"swap": true}}
 	field[field_index]["cell"] = Vector2i(row, col)
 	changed.emit()
 	return {"ok": true, "reason": "", "data": {}}
@@ -2041,15 +2083,23 @@ static func _cell_ok(row: int, col: int) -> bool:
 	return row >= 7 and row <= 10 and col >= 0 and col <= 10
 
 
-## 第 (row,col) 格是否已被自己占用（ignore = 允许自己占着的那个下标）
-func _cell_taken(row: int, col: int, ignore_field_index: int) -> bool:
+## 第 (row, col) 格上站着的是 `field` 里的第几艘（空 / 越界 → −1）
+##
+## ★★ 2026-11-07 新增。取代原来的 `_cell_taken(ignore)` —— 那个只回答
+##    「有没有人」，而互换需要知道「是谁」，否则没法把对方挪到我的格子上。
+func field_index_at(row: int, col: int) -> int:
 	for i in field.size():
-		if i == ignore_field_index:
-			continue
 		var c = field[i].get("cell", Vector2i(-1, -1))
 		if c is Vector2i and c.x == row and c.y == col:
-			return true
-	return false
+			return i
+	return -1
+
+
+## 条目 → 显示名（日志 / 互换提示用；查不到就退回 key，绝不返回空串）
+static func entry_name(e: Dictionary) -> String:
+	var key := String(e.get("ship_key", ""))
+	var d := EveShipDatabase.by_id(key)
+	return String(d.get("name", key))
 
 
 ## 落点预览：这一格现在能不能落（拖放时显示提示用）。
@@ -2057,23 +2107,35 @@ func _cell_taken(row: int, col: int, ignore_field_index: int) -> bool:
 ## ⚠️ 它存在的唯一理由是**让提示与实际结果共用一份判定**。
 ##    如果拖动时另写一套「能不能放」的判断，两套迟早会分叉，
 ##    症状是「提示说能放、松手却被拒」或者反过来 —— 玩家只会觉得游戏坏了。
+##
+## ★★ 2026-11-07：落点有船时返回 `swap = true` + `swap_name`，
+##    让提示能说「与 死亡旋涡级 互换位置」而不是干巴巴的「移动到这里」。
+##    ⚠️ 判定必须与 `deploy_from_bench` / `move_field` 一一对应：
+##      · 备战席过来的互换**不看** `field_limit`（换人不换人数）
+##      · 场上过来的互换要求自身有真实格号
 func preview_place(row: int, col: int, source: StringName, index: int) -> Dictionary:
 	if phase != Phase.PREP:
 		return {"ok": false, "reason": "只有准备阶段能布阵"}
 	if not _cell_ok(row, col):
 		return {"ok": false, "reason": "只能放在我方部署区（棋盘下 4 行）"}
+	var occ := field_index_at(row, col)
 	if source == &"bench":
 		if index < 0 or index >= bench.size():
 			return {"ok": false, "reason": "这一格是空的"}
+		if occ >= 0:
+			return {"ok": true, "reason": "", "swap": true,
+					"swap_name": entry_name(field[occ])}
 		if field.size() >= field_limit():
 			return {"ok": false, "reason": "上场已满 %d／%d" % [field.size(), field_limit()]}
-		if _cell_taken(row, col, -1):
-			return {"ok": false, "reason": "这一格已经有船了"}
 		return {"ok": true, "reason": ""}
 	if index < 0 or index >= field.size():
 		return {"ok": false, "reason": "这一格是空的"}
-	if _cell_taken(row, col, index):
-		return {"ok": false, "reason": "这一格已经有船了"}
+	if occ >= 0 and occ != index:
+		var mine = field[index].get("cell", Vector2i(-1, -1))
+		if not (mine is Vector2i) or mine.x < 0:
+			return {"ok": false, "reason": "这一格已经有船了"}
+		return {"ok": true, "reason": "", "swap": true,
+				"swap_name": entry_name(field[occ])}
 	return {"ok": true, "reason": ""}
 
 

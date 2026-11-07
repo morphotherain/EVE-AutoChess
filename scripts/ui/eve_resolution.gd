@@ -51,6 +51,34 @@ const AUTO := ""
 ##    所以换台机器、换显示器（再进任意场景）都会重新挑最合适的一档。
 const AUTO_LABEL := "自适应"
 
+## ★★ 2026-11-08 **全屏 / 最大化时只改清晰度，不改窗口尺寸**。
+##
+## ── 玩家报的现象（截图坐实）─────────────────────────────────────
+##  把窗口最大化（看起来就是全屏）之后，点任意分辨率档 ⇒ 窗口被缩回
+##  那个档位的大小、并退出最大化 ⇒ 右边和下边露出大片桌面（黑边）。
+##
+## ── 为什么不能在全屏下 `win.size = 档位` ──────────────────────────
+##  Windows 上对最大化窗口写 size 会**先 un-maximize 再 resize** ——
+##  这是 OS 的行为，不是 Godot 的 bug，也没法用一个 flag 关掉。
+##  ⇒ 全屏/最大化这个状态下，「窗口该多大」已经不是我们该回答的问题了。
+##
+## ── 那"改分辨率"还有什么意义 ────────────────────────────────────
+##  变成**渲染精度档**：`Viewport.scaling_3d_scale`。
+##    · scale < 1 ⇒ 3D 按更低分辨率渲染再放大 ⇒ 省 GPU，画面略糊；
+##    · scale > 1 ⇒ 超采样（4K 档跑在 1080p 全屏上），更干净但更贵。
+##  ⚠️ **只作用于 3D**：2D 的 HUD / 面板始终按窗口原生分辨率画 ——
+##     文字永远清晰。这是刻意的：分辨率档在这里的用途是「画质 / 性能」，
+##     不是「把字放大缩小」（那是字号滑杆的活）。
+##  ⚠️ 所以这条只在 **Forward+ / Mobile** 后端成立。本工程桌面端用默认
+##     `forward_plus` ✔；移动端走 `gl_compatibility` 但那里 `is_enabled()`
+##     本来就是 false（安卓全屏、没有可调余地），不受影响。
+##
+## ── 从全屏退回来怎么办 ──────────────────────────────────────────
+##  窗口模式分支里把 scale 复位 1.0；另外 `apply_from_settings()` 会给根窗口
+##  挂一次 `size_changed`（还原尺寸时顺手复位），避免"退出最大化后画面还是糊的"。
+const MIN_RENDER_SCALE := 0.25   ## `Viewport.scaling_3d_scale` 的引擎下限
+const MAX_RENDER_SCALE := 2.0    ## 引擎上限
+
 ## 可选档位。**顺序 = 设置窗里的显示顺序**（用户给的图，从上到下）。
 ## ⚠️ 表增删不受限，但存档用的是 `key`（字符串）不是下标 ——
 ##    工程惯例：写进代码/存档的「位置」先问「这列表会增删吗」⇒ 用 id 找。
@@ -83,6 +111,24 @@ static func is_enabled() -> bool:
 	# ⚠️ 无头模式**一律不生效**：自检的 viewport 是钉死的 1920×1920，
 	#    真去改窗口尺寸会把所有几何断言带歪（而且它根本没有"窗口"）。
 	return DisplayServer.get_name() != "headless"
+
+
+## 窗口是否处于「尺寸不由我们决定」的状态（全屏 / 独占全屏 / 最大化）。
+##
+## ⚠️ 三种都要判：
+##    · `MODE_MAXIMIZED` —— **玩家实际最常遇到的那个**（点标题栏最大化按钮 /
+##      双击标题栏 / Win+↑）。它看起来就是全屏，但 `win.size = …` 会先把它
+##      还原成窗口再改尺寸 ⇒ 正是"改分辨率留一大块黑边"的现场。
+##    · `MODE_FULLSCREEN` —— 无边框全屏。引擎会忽略 size 写入，但**别去写**：
+##      某些平台上写 size 会把模式悄悄切回窗口化。
+##    · `MODE_EXCLUSIVE_FULLSCREEN` —— 独占全屏。同上，而且改尺寸容易黑屏一下。
+static func is_screen_filled(win: Window) -> bool:
+	if win == null:
+		return false
+	var m := win.mode
+	return m == Window.MODE_MAXIMIZED \
+			or m == Window.MODE_FULLSCREEN \
+			or m == Window.MODE_EXCLUSIVE_FULLSCREEN
 
 
 ## 屏幕可用区尺寸（已扣掉任务栏）。拿不到（无头 / 异常）⇒ 回落 BASE。
@@ -185,11 +231,19 @@ static func current_index() -> int:
 ##
 ## ⚠️ 只在 `is_enabled()` 为真时动手；无头 / 移动端直接返回（见顶注三条边界）。
 ## ⚠️ 居中要算**可用区**而不是整屏：整屏居中会把标题栏顶到任务栏里。
+## ★★ 全屏 / 最大化 ⇒ **一个字节都不碰窗口**，只改 3D 渲染精度
+##    （原因见 `MIN_RENDER_SCALE` 上那一大段）。
 static func apply_index(win: Window, idx: int) -> void:
 	if win == null or idx < 0 or idx >= CHOICES.size():
 		return
 	if not is_enabled():
 		return
+	if is_screen_filled(win):
+		apply_render_scale(win, idx)
+		return
+	# ⚠️ 从全屏退回来（或者本来就是窗口）⇒ 渲染缩放归位。
+	#    不归位的话，玩家在全屏里选过 720p、退回窗口模式后画面还是糊的。
+	reset_render_scale(win)
 	# ⚠️ 档位比屏幕可用区大 ⇒ 退回自动档。否则窗口超出屏幕、再一居中，
 	#    四边都被裁掉（1080p 笔记本选了 4K 档 ⇒ 开屏只看得见画面中间一块）。
 	if not fits_screen(idx):
@@ -200,8 +254,70 @@ static func apply_index(win: Window, idx: int) -> void:
 	_center(win)
 
 
+## 全屏 / 最大化下「分辨率档」的真实语义：**只改 3D 渲染精度**。
+##
+## 比例 = 档位尺寸 / 当前窗口尺寸，取**两边更小的那个**。
+## ⚠️ 用 min 而不是面积比：4:3 的档（1400×1050）落在 16:9 的屏上时，
+##    按面积算会算出比宽度方向更低的倍率 ⇒ 画面糊得比玩家选的那档还过头。
+## ⚠️ 夹在 [0.25, 2.0]：这是引擎自己的上下限，越界会被静默截断（值不报错但没效果）。
+static func apply_render_scale(win: Window, idx: int) -> void:
+	if win == null or idx < 0 or idx >= CHOICES.size():
+		return
+	var cur := _filled_size(win)
+	if cur.x < 1 or cur.y < 1:
+		return
+	var s := minf(float(int(CHOICES[idx]["w"])) / float(cur.x),
+			float(int(CHOICES[idx]["h"])) / float(cur.y))
+	s = clampf(s, MIN_RENDER_SCALE, MAX_RENDER_SCALE)
+	if not is_equal_approx(win.scaling_3d_scale, s):
+		win.scaling_3d_scale = s
+
+
+## 渲染精度归位（= 原生分辨率渲染）。
+##
+## ⚠️ 用 `is_equal_approx` 挡一次：这个函数会被窗口 `size_changed` 拖去高频调用，
+##    而不变还写值等于每帧重配一次 3D 视口。
+##    [INFER] 「写同值会重配视口」是按 Godot 的 property-setter 行为推的，
+##    没有单独量过开销 —— 但挡一次的成本几乎为零，没必要冒险。
+static func reset_render_scale(win: Window) -> void:
+	if win == null:
+		return
+	if not is_equal_approx(win.scaling_3d_scale, 1.0):
+		win.scaling_3d_scale = 1.0
+
+
+## 全屏 / 最大化时的「真实画面尺寸」。
+##
+## ⚠️ `MODE_MAXIMIZED` 用 `win.size`（引擎返回的是最大化后的客户区）——
+##    这正好是我们要的分母。
+## ⚠️ 两个 fullscreen 模式下 `win.size` 返回的是**还原尺寸**（不是屏幕尺寸），
+##    拿它当分母会算出离谱的倍率（比如 1080p 屏上留着一个 1366×768 的还原尺寸
+##    ⇒ 选 4K 档会算出 2.8 倍，被夹成 2.0 —— 玩家白开超采样）。
+##    ⇒ 这两种模式一律问屏幕。
+static func _filled_size(win: Window) -> Vector2i:
+	if win == null:
+		return Vector2i.ZERO
+	var m := win.mode
+	if m == Window.MODE_FULLSCREEN or m == Window.MODE_EXCLUSIVE_FULLSCREEN:
+		return DisplayServer.screen_get_size(win.current_screen)
+	return win.size
+
+
 ## 开局 / 换分辨率后调它：读盘 → 应用。三个场景的 `_ready` 都要调一次。
+##
+## ★ 顺带给根窗口挂一次尺寸监听：玩家从最大化还原时把 3D 精度收回来。
+##   ⚠️ 只挂一次（`has_meta` 挡重）—— 根窗口是**跨场景常驻**的同一个实例，
+##      三个场景各调一次就会挂三份，还原时连跑三遍（虽无害但没必要）。
+##   ⚠️ 回调里**只复位精度、不套用档位尺寸**：玩家刚手动把窗口拉成某个大小，
+##      这时候再按档位改一次尺寸，就是"我刚拖好你又改回去"。
 static func apply_from_settings(win: Window) -> void:
+	if win == null:
+		return
+	if is_enabled() and not win.has_meta("eve_res_size_hook"):
+		win.set_meta("eve_res_size_hook", true)
+		win.size_changed.connect(func() -> void:
+			if not is_screen_filled(win):
+				reset_render_scale(win))
 	apply_index(win, current_index())
 
 

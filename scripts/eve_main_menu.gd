@@ -353,10 +353,6 @@ const UPDATE_PANEL := preload("res://scripts/ui/eve_update_panel.gd")
 ##    `begin_download` …），标成基类会让静态检查在调用点报「不存在该方法」。
 var _upd = null
 var _upd_panel = null
-## 右下角小字要显示的内容。空 = 隐藏。
-## ⚠️ 自己维护，⛔ 不读 `EveUpdater.status_text` —— 老客户端那份只会报「静默下载」，
-##    而我们现在有更准的进度（包括「替老 EveUpdater 观察」的那种，见检查器）。
-var _upd_status := ""
 ## ★ 2026-11-01 鸣谢名单：版本号上方按钮 + 右侧独立面板。
 ##   ⚠️ 只建一次，之后靠 `visible` 切换（与版权声明面板同口径，避免闪烁 / 丢引用）。
 var _ack_panel: PanelContainer = null
@@ -1037,16 +1033,19 @@ func _build_version_tag() -> void:
 
 ## 把更新状态同步到右下角那行小字。空文本 = 隐藏（绝大多数时候应该隐藏）。
 ##
-## ⚠️ 数据源优先 `_upd_status`（本文件自己维护），⛔ 不是只读 `EveUpdater.status_text`：
-##    老客户端那份只会说「正在下载 N%」，而我们要报的还包括「替老 EveUpdater
-##    观察到的进度」与「已就绪 · 重启生效」。见 `_on_upd_progressed`。
-##    `EveUpdater.changed` 仍然驱动这里（连接在 `_build_version_tag`），两路都会刷新。
+## 把热更状态同步到版本号下面那行小字。空文本 = 隐藏。
+##
+## ⚠️ 2026-11-07 二改：这里**不再反映开屏页的状态**（用户原话：
+##    「而不是现在在右下角一点小字」）。开屏页已经把版本对比、进度、
+##    重启提示全部承担了，小字再报一遍属于重复且碍眼。
+##
+## 它现在只剩一个职责：**兜底显示老 `EveUpdater` 的静默下载进度**
+## —— 那段代码在 autoload 里、热更改不掉，它的 `status_text` 是唯一出口。
+## 正常情况下这一行是空的（`visible = false`）。
 func _refresh_update_tag() -> void:
 	if _update_tag == null:
 		return
-	var s := _upd_status
-	if s == "":
-		s = String(EveUpdater.status_text)
+	var s := String(EveUpdater.status_text)
 	_update_tag.text = s
 	_update_tag.visible = s != ""
 
@@ -1069,11 +1068,22 @@ func _refresh_update_tag() -> void:
 #     一句话 —— autoload 在 pck 挂载前就实例化，老客户端上永远是老脚本。
 
 ## 1.5 秒后启动检查。用子 Timer，理由见上面第 3 条注释。
+## 开屏检查。
+##
+## ⚠️ 这里**只等 0.05 秒**（原来是 1.5 秒），原因见用户 2026-11-07 的原话：
+##      「我觉得应该在最开始弹……做成完全开屏显示都行」
+##    1.5 秒那种「主菜单先铺好、动画落下再浮个卡片」的节奏，读起来像一个
+##    可以无视的提示；用户要的是**启动即挡**，所以这里几乎不延迟。
+##
+## ⚠️ 但也不能是 0：`_ready()` 里立刻 `add_child(HTTPRequest)` + `request()`
+##    会拿到 `ERR_UNCONFIGURED`（节点还没真正进树）。一帧左右就够。
+##    用子 Timer 而不是 `await create_timer()`：玩家可能立刻点「开始游戏」，
+##    本节点被 free，`await` 恢复时会报 "object was freed"。
 func _start_update_check() -> void:
 	var t := Timer.new()
 	t.name = "UpdateCheckDelay"
 	t.one_shot = true
-	t.wait_time = 1.5
+	t.wait_time = 0.05
 	t.timeout.connect(_on_update_check_due)
 	add_child(t)
 	t.start()
@@ -1116,8 +1126,6 @@ func _ensure_update_panel():
 func _on_upd_asked(cur: String, new_ver: String, size_mb: float) -> void:
 	if not is_inside_tree():
 		return
-	_upd_status = "发现新版本 V%s" % new_ver
-	_refresh_update_tag()
 	_ensure_update_panel().show_ask(cur, new_ver, size_mb)
 
 
@@ -1134,30 +1142,23 @@ func _on_upd_progressed(pct: float, done: int, total: int, allow_dismiss: bool) 
 	if not p.is_open():
 		p.show_progress(String(_upd.cur_ver), String(_upd.new_ver), allow_dismiss)
 	p.set_progress(pct, done, total)
-	_upd_status = "正在下载更新 %d%%" % int(round(pct * 100.0))
-	_refresh_update_tag()
 
 
 func _on_upd_ready(ver: String) -> void:
 	if not is_inside_tree():
 		return
-	_upd_status = "V%s 已就绪 · 重启生效" % ver
-	_refresh_update_tag()
 	_ensure_update_panel().show_ready(ver)
 
 
 func _on_upd_failed(msg: String, cur: String, new_ver: String) -> void:
 	if not is_inside_tree():
 		return
-	_upd_status = ""
-	_refresh_update_tag()
 	_ensure_update_panel().show_error(msg, cur, new_ver)
 
 
 ## 「稍后」= 本次不问，下次启动再问（用户拍板）。⛔ 不写任何持久化标记。
 func _on_upd_dismissed() -> void:
-	_upd_status = ""
-	_refresh_update_tag()
+	pass
 
 
 func _on_upd_restart() -> void:

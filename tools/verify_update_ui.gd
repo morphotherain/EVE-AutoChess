@@ -217,8 +217,25 @@ func _check_panel() -> void:
 	panel.show_ask("0.14.10.5.35", "0.14.10.5.41", 1.12)
 	_ok(panel.is_open(), "② `show_ask()` 打开")
 	_ok(panel._title_lb.text == "发现新版本", "② 标题正确")
-	_ok(panel._new_lb.text == "V0.14.10.5.41 · 1.12 MB", "② 新版本行含版本与体积")
+	# ⚠️ 用「分别包含」而不是整串相等：版本号与体积之间的分隔符是纯排版
+	#    （单空格 / 双空格都出现过），钉死空格数会让这条断言下次排版微调就红。
+	_ok(panel._new_lb.text.contains("0.14.10.5.41")
+			and panel._new_lb.text.contains("1.12 MB"),
+			"② 新版本行含版本与体积")
+	_ok(panel._cur_lb.text.contains("0.14.10.5.35"), "② 当前版本行含旧版本号")
 	_ok(not panel._bar.visible, "② 询问态不显示进度条")
+
+	# ── 开屏形态（用户 2026-11-07 明确要求，别再退化成小卡片）──
+	# ⚠️ 这三条是「看起来能跑」和「玩家真的看得见」的分界，改版式前先读这里。
+	var has_backdrop := panel.get_node_or_null("Backdrop") != null
+	_ok(has_backdrop, "② 有不透明全屏底（`Backdrop` 节点）")
+	if has_backdrop:
+		var bd = panel.get_node("Backdrop")
+		_ok(bd.color.a >= 0.99, "② 全屏底不透明（读起来是「换了个界面」而非浮层）")
+	_ok(panel.anchor_right >= 0.999 and panel.anchor_bottom >= 0.999,
+			"② 面板铺满视口（否则点得到后面的主菜单）")
+	_ok(panel.get_node_or_null("Center/Card") == null,
+			"② 不再用 460 宽的居中卡片（已改为开屏页）")
 
 	panel.show_progress("0.14.10.5.35", "0.14.10.5.41", false)
 	_ok(panel._bar.visible, "③ 进度态显示进度条")
@@ -227,14 +244,19 @@ func _check_panel() -> void:
 	_ok(panel._pct_lb.text == "43%", "③ 百分比文案 = 43%")
 	_ok(panel._detail_lb.text.contains("MB"), "③ 明细行显示已下/总量")
 
-	# 进度态点空白不许关闭 —— 否则玩家会以为「被我点掉了」
-	panel._on_root_input(_click())
-	_ok(panel.is_open(), "④ 下载中点卡片外不关闭（防误触）")
+	# 下载态不给任何退出入口。
+	# [WHY] 上一版给了「后台继续」，收起之后进度只剩右下角一行小字 ——
+	#       那正是用户否掉的东西（「而不是现在在右下角一点小字」）。
+	_ok(not panel._btn_secondary.visible and not panel._btn_primary.visible,
+			"④ 下载中两个按钮都隐藏（既不「取消」也不「收起」）")
 
 	panel.show_ready("0.14.10.5.41")
 	_ok(panel._title_lb.text == "更新已就绪", "⑤ 就绪态标题")
 	_ok(panel._btn_primary.text == "立即重启", "⑤ 主按钮 = 立即重启")
 	_ok(not panel._bar.visible, "⑤ 就绪态收起进度条")
+	# 旧版这里「当前版本」显示成一个破折号（`show_ready` 拿不到 cur），截图确认过。
+	_ok(not panel._cur_row.visible,
+			"⑤ 就绪态隐藏「当前版本」行（否则显示成破折号）")
 
 	panel.show_error("网络不给力", "0.14.10.5.35", "0.14.10.5.41")
 	_ok(panel._title_lb.text == "更新失败", "⑥ 失败态标题")
@@ -248,11 +270,6 @@ func _check_panel() -> void:
 # ══════════════════════════════════════════════════════════════════
 #  工具
 # ══════════════════════════════════════════════════════════════════
-func _click() -> InputEventMouseButton:
-	var e := InputEventMouseButton.new()
-	e.button_index = MOUSE_BUTTON_LEFT
-	e.pressed = true
-	return e
 
 
 func _ok(cond: bool, label: String) -> void:

@@ -758,6 +758,9 @@ func begin_prep() -> void:
 		if versus.round_kind() == EveMatchState.RoundKind.CAROUSEL and _v_event_round != gr:
 			_v_event_round = gr
 			_prep_phase.versus_event = true
+			# 事件面板不要压在棋盘上（2026-11-07：棋盘改为准备阶段常驻，
+			# 不主动收会在事件 UI 后面亮着）。
+			arena.hide_board()
 			_prep_phase.enter_event_node()
 			return
 		_prep_phase.versus_event = false
@@ -769,6 +772,8 @@ func begin_prep() -> void:
 	#    compute_deploy_z(我方, []) 就要拿到一支空舰队去算接敌距离。
 	#    分派在最前面 = 那一段永远不会被事件节点走到。
 	if run.phase != EveRunState.Phase.ENDING and EveNodeTable.is_event(run.node_index):
+		# 同上：棋盘常驻后，事件节点必须显式收起。
+		arena.hide_board()
 		_prep_phase.enter_event_node()
 		return
 
@@ -801,18 +806,29 @@ func begin_prep() -> void:
 	# EveBattleArena.align_board_to_line 的说明）
 	arena.align_board_to_line(arena.deploy_own_z)
 
-	# ⚠️ 只重新取景，**不调 reset_camera()** —— 保留玩家上一局转过的视角。
-	#    每回合把镜头掰回默认角度的话，玩家刚调好的观察角度就白调了。
+	# ★★ 2026-11-07（玩家反馈「准备的时候视角不变，直接使用棋盘模式」）：
+	#    这里原来是 `frame_battlefield()`（斜 3/4 视角看双方舰队），棋盘只在
+	#    玩家**拿起船**时才由拖放控制器显形。于是每拖一艘船，镜头就要
+	#    41.3° → 75° → 41.3° 翻一次；一回合拖五六艘 = 翻十几次。
 	#
-	# ⚠️⚠️ 但**视距必须还原**（2026-09-20 阶段 D 回归的修复）：
-	#    `reset_camera()` 管的是**角度**（那个确实该保留），
-	#    而开战运镜改的是**视距**（2026-10-31 起是 2 秒三拍运镜，终点推近）——
-	#    它不属于"玩家的观察角度"，是系统临时加的。不还原的话，下一轮布阵时
-	#    棋盘格投影会整体下移，格 (8,5) 正好落进商店窗的出售区矩形里
-	#    ⇒ 玩家的船被"拖到格子上"却**卖掉了**。
+	#    现在改成**进准备阶段就进棋盘模式**，整个准备期间镜头不动。
+	#    收起棋盘只发生在两个时刻：开战（`start_battle()`）与事件节点。
+	#
+	# ⚠️ `show_board_for_deploy()` 内部已经做了三件事，别在外面重复：
+	#      ① 棋盘显形 ② yaw 对齐棋盘正对位 + 俯角切 BOARD_VIEW_PITCH
+	#      ③ `reset_battle_zoom()` 把开战运镜改过的视距还原
+	#    ⚠️ 但**不调 `reset_camera()`** —— 玩家自己转过的观察角度仍然保留，
+	#       只是 yaw 会被对齐到棋盘（棋盘要正对着看，这是棋盘模式的必然）。
+	#
+	# ⚠️⚠️ 视距必须还原（2026-09-20 阶段 D 回归的修复，别删）：
+	#    开战运镜把视距推近过，不还原的话下一轮布阵时棋盘格投影会整体下移，
+	#    格 (8,5) 正好落进商店窗的出售区矩形里 ⇒ 玩家的船「拖到格子上」却**卖掉**。
 	#    详见 EveBattleArena.reset_battle_zoom() 的说明。
-	arena.reset_battle_zoom()
-	arena.frame_battlefield()
+	#
+	# ★ 布阵放大常驻：玩家 2026-11-07 反馈「拖动的时候有放大很好，
+	#   但不拖的时候太小」⇒ 放大跟随「棋盘是否可见」，不再跟随「是否在拖」。
+	arena.show_board_for_deploy()
+	arena.set_ships_board_mode(true)
 
 	_place_fleet(_own_ships, 0)
 	_place_fleet(_enemy_ships, 1)
@@ -1259,6 +1275,14 @@ func start_battle() -> void:
 	#   那一刻对手本回合的编制还没发过来（他要等准备阶段中途才发），
 	#   于是只能先按本地 AI 占位 —— 到开打时再换成真的。
 	_versus_rebuild_enemy_if_remote()
+	# ★ 2026-11-07：棋盘改为准备阶段常驻 ⇒ **开战这一刻**是它该收起的地方。
+	#   `hide_board()` 内部会一并做三件事（都必要）：
+	#     ① 棋盘隐藏 ② 俯角回 DEFAULT_PITCH ③ **视距还回 DEFAULT_ZOOM**
+	#   ⚠️ ③ 尤其别漏：不还的话下一轮布阵格 (8,5) 会落进商店出售区，
+	#      船「拖到格子上」却卖掉。见 EveBattleArena.hide_board() 的说明。
+	#   ⚠️ 必须在 `_battle_phase.start()` **之前** —— 开战运镜的起点取景
+	#      是按"棋盘已收起"算的，顺序反了镜头会从布阵取景起飞。
+	arena.hide_board()
 	var s := _battle_phase.start()
 	if s != null:
 		sim = s

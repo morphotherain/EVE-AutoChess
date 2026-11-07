@@ -1,186 +1,226 @@
 extends Control
 
-## EVE 自走棋 —— 热更新面板（四态：询问 / 下载中 / 已就绪 / 失败）
+## EVE 自走棋 —— 开屏更新页（四态：询问 / 下载中 / 已就绪 / 失败）
 ##
 ## ══════════════════════════════════════════════════════════════════
-##  为什么需要它（而不是复用 EveConfirmDialog）
+##  为什么是**全屏开屏页**，不是一张居中卡片
 ## ══════════════════════════════════════════════════════════════════
-##  `EveConfirmDialog` 只有「文案 + 两按钮」，**没有进度条**。
-##  而「下载 1.1 MB」这件事如果不给条，玩家看到的就是一个卡住的窗口
-##  —— 用户 2026-11-07 原话：「整一个下载进度条」。
+##  2026-11-07 第一版做的是 460 宽居中卡片 + 半透明压暗（沿用 `EveConfirmDialog`
+##  的皮肤）。用户看过之后否掉了：
+##      「加一个检测更新的大弹窗……而不是现在在右下角一点小字，
+##        做成完全开屏显示都行」
 ##
-##  所以这里沿用它的**视觉语言**（同一套 StyleBox / 标题栏 / 按钮皮肤），
-##  但把主体换成「版本对比行 + 进度条 + 明细行 + 按钮行」。
+##  [WHY] 判断没错，而且是有道理的：卡片式弹窗在视觉上等于「主菜单上的一个浮层」，
+##        玩家会当成可以无视的提示；而「要不要更新」是一次**需要玩家负责的选择**
+##        —— 它应该占据整屏、把主菜单完全挡在身后。
+##  ⇒ 本文件改成：**不透明全屏底 + 居中内容区 + 大字号 + 大按钮**。
+##        玩家关掉它之前，主菜单既看不见也点不到（`MOUSE_FILTER_STOP` 铺满视口）。
 ##
-##  ── 四态（用 `set_mode()` 切，不要 new 第二个面板）────────────────
-##    ASK      当前 V35 → V41 · 1.12 MB    [稍后] [现在更新]
-##    PROGRESS  ▓▓▓▓▓▓░░░░ 43%             [后台继续]
-##              1.1 / 1.12 MB · 约 3 秒
-##    READY    已就绪，重启后生效           [稍后重启] [立即重启]
-##    ERROR    下载失败（网络）             [关闭] [重试]
+##  ── 与卡片版的三处行为差异（都是有意的）────────────────────────
+##  ① **没有右上角 ✕，也不能点空白关闭**。全屏页上每一点都是「空白」，
+##     点一下就关等于玩家还没看清就把选择取消了。要离开只能点按钮。
+##  ② **下载中不给任何关闭入口**。以前给了「后台继续」，收起后进度只剩右下角
+##     一行小字 —— 那正是用户抱怨的东西。现在下载就停在页面上，几秒的事。
+##  ③ **`稍后` 仍然是安全默认**（获得焦点）：回车 / 手柄确认不会误触发下载。
 ##
 ##  ── 三个实现要点 ─────────────────────────────────────────────────
-##  ① **Control 而非 Window**：系统窗口换不掉皮（见 `eve_confirm_dialog.gd`
-##     文件顶注 ①）。它必须挂在**主菜单根节点**（铺满视口），不是 `_content`。
-##  ② **`process_mode = ALWAYS`**：主菜单可能处于暂停态（Esc 菜单），
+##  ⚠️ `Control` 而非 `Window`：系统窗口换不掉皮（见 `eve_confirm_dialog.gd` 顶注 ①）。
+##     必须挂在**主菜单根节点**（铺满视口），⛔ 不是 `_content`。
+##  ⚠️ `process_mode = ALWAYS`：主菜单可能处于暂停态（Esc 菜单），
 ##     继承态收不到输入，症状是「按钮看着能点、点了没反应」。
-##  ③ **文案行 ⛔ 不开 autowrap**：本工程踩过「autowrap Label 进容器 ⇒
+##  ⚠️ 文案行 ⛔ 不开 autowrap：本工程踩过「autowrap Label 进容器 ⇒
 ##     最小宽度塌成一个字宽 ⇒ 折成竖排 ⇒ 高度炸弹」（14 → 958 px）。
-##     本面板每行文案都短、且自带 `\n`，单行显示即可。
 
 const FONT := preload("res://scripts/ui/eve_font.gd")
 
 enum Mode { ASK, PROGRESS, READY, ERROR }
 
-## 卡片宽度。比 `EveConfirmDialog` 的 400 宽一点：要放「V0.14.10.5.35 → V0.14.10.5.41」
-## 这种长版本号（20 个字符），400 会挤。
-const CARD_W := 460
-## 进度条高度。不做圆角、不做渐变 —— 与 HUD 的「细线 + 平直」语言一致。
-const BAR_H := 8
+## 内容区宽度。
+## [WHY] 620 是「长版本号两侧还能留白」的下限，但在 1920 宽的视口里只占 32%，
+##       读起来仍像一块卡片 —— 用户要的是「大弹窗 / 开屏」，所以放到 760。
+##       ⚠️ 不能再大：手机竖屏的逻辑视口窄，760 以上会顶满到边。
+const CONTENT_W := 760
+## 进度条高度。开屏页上可以比 HUD 粗一点 —— 这里它就是视觉重心。
+const BAR_H := 14
+## 主按钮高度。手机竖屏下 44 是拇指可靠命中的下限，开屏页给到 64。
+const BTN_H := 64
 
-## 询问态点了「现在更新」
 signal accepted()
-## 询问态点了「稍后」（或 ✕）
 signal dismissed()
-## 就绪态点了「立即重启」
 signal restart_now()
-## 失败态点了「重试」
 signal retry_requested()
 
 var _mode: int = Mode.ASK
 
+var _eyebrow_lb: Label
 var _title_lb: Label
+var _sub_lb: Label
 var _cur_lb: Label
 var _new_lb: Label
+## 「当前版本」整行（含它上面的分隔线）。READY 态要藏起来，见 `set_mode`。
+var _cur_row: Control
+var _cur_hr: Control
 var _bar: ProgressBar
 var _pct_lb: Label
 var _detail_lb: Label
 var _btn_primary: Button
 var _btn_secondary: Button
-var _close_btn: Control
-var _close_hot := false
 
 
 func _ready() -> void:
-	# ② 暂停态也要能点
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	visible = false
-	gui_input.connect(_on_root_input)
 	_build()
 
 
 # ══════════════════════════════════════════════════════════════════
-#  构建（视觉与 `EveConfirmDialog` 逐项对齐，改那边要同步这边）
+#  构建
 # ══════════════════════════════════════════════════════════════════
 
 func _build() -> void:
-	# ── 全屏压暗（与 `EveHudRoot._build_pause_veil()` 同色同手法）──
-	var dim := ColorRect.new()
-	dim.name = "Scrim"
-	dim.color = Color(0.02, 0.03, 0.04, 0.45)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(dim)
+	# ── 不透明全屏底：主菜单在它后面彻底不可见 ──
+	# [WHY] 不用半透明：半透明会让人读成「浮层」，而不透明读成「换了个界面」。
+	#       用户要的是后者。
+	var bg := ColorRect.new()
+	bg.name = "Backdrop"
+	bg.color = Color(0.028, 0.038, 0.046, 1.0)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(bg)
 
+	# ── 居中容器 ──
 	var center := CenterContainer.new()
 	center.name = "Center"
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(center)
 
-	var card := PanelContainer.new()
-	card.name = "Card"
-	card.custom_minimum_size = Vector2(CARD_W, 0)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = EveWindow.C_PANEL_SOLID
-	sb.border_color = EveWindow.C_BORDER
-	sb.set_border_width_all(1)
-	sb.set_corner_radius_all(0)
-	sb.content_margin_left = 0
-	sb.content_margin_right = 0
-	sb.content_margin_top = 0
-	sb.content_margin_bottom = 0
-	card.add_theme_stylebox_override("panel", sb)
-	center.add_child(card)
+	var col := VBoxContainer.new()
+	col.name = "Column"
+	col.custom_minimum_size = Vector2(CONTENT_W, 0)
+	col.add_theme_constant_override("separation", 0)
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center.add_child(col)
 
-	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", 0)
-	card.add_child(root)
-	root.add_child(_build_title_bar())
-	root.add_child(_build_body())
+	col.add_child(_build_header())
+	col.add_child(_spacer(34))
+	col.add_child(_build_info())
+	col.add_child(_spacer(26))
+	col.add_child(_build_progress())
+	col.add_child(_build_actions())
 
 
-func _build_title_bar() -> Control:
-	var bar := PanelContainer.new()
-	bar.name = "TitleBar"
-	bar.custom_minimum_size = Vector2(0, EveWindow.HEADER_H)
-	var hsb := StyleBoxFlat.new()
-	hsb.bg_color = EveWindow.C_TITLE_BG
-	hsb.border_color = EveWindow.C_BORDER
-	hsb.border_width_bottom = 1
-	hsb.content_margin_left = 7
-	hsb.content_margin_right = 7
-	bar.add_theme_stylebox_override("panel", hsb)
+## 「品牌小字 + 大标题 + 一句说明」。三行共同承担「这是一件需要你决定的事」。
+func _build_header() -> Control:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-	bar.add_child(row)
-
-	# 左角 2×12 竖线（EVE 式角标，与 EveWindow 同色同尺寸）
+	var mark := HBoxContainer.new()
+	mark.add_theme_constant_override("separation", 8)
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# 2×16 竖线角标（与 `EveWindow` 标题栏同色同手法）
 	var tick := ColorRect.new()
-	tick.color = Color(0.45, 0.62, 0.68, 0.55)
-	tick.custom_minimum_size = Vector2(2, 12)
+	tick.color = Color(0.45, 0.62, 0.68, 0.75)
+	tick.custom_minimum_size = Vector2(2, 16)
 	tick.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	tick.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(tick)
+	mark.add_child(tick)
+
+	_eyebrow_lb = Label.new()
+	_eyebrow_lb.text = "EVE 自走棋 · 启动检查"
+	FONT.fs(_eyebrow_lb, 14)
+	_eyebrow_lb.add_theme_color_override("font_color", Color(0.48, 0.60, 0.66, 0.95))
+	_eyebrow_lb.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_eyebrow_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mark.add_child(_eyebrow_lb)
+	box.add_child(mark)
 
 	_title_lb = Label.new()
-	_title_lb.text = "游戏更新"
-	_title_lb.add_theme_color_override("font_color", EveWindow.C_TEXT)
-	FONT.fs(_title_lb, 12)
-	_title_lb.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_title_lb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_title_lb.text = "发现新版本"
+	FONT.fs(_title_lb, 40)
+	_title_lb.add_theme_color_override("font_color", Color(0.80, 0.91, 0.94, 1.0))
+	_title_lb.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_title_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(_title_lb)
+	box.add_child(_title_lb)
 
-	_close_btn = Control.new()
-	_close_btn.name = "CloseBtn"
-	_close_btn.custom_minimum_size = Vector2(20, 18)
-	_close_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_close_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	_close_btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	_close_btn.draw.connect(_draw_close_btn)
-	_close_btn.gui_input.connect(_on_close_input)
-	_close_btn.mouse_entered.connect(func() -> void:
-		_close_hot = true
-		if _close_btn != null:
-			_close_btn.queue_redraw())
-	_close_btn.mouse_exited.connect(func() -> void:
-		_close_hot = false
-		if _close_btn != null:
-			_close_btn.queue_redraw())
-	row.add_child(_close_btn)
-	return bar
+	_sub_lb = Label.new()
+	_sub_lb.text = ""
+	FONT.fs(_sub_lb, 15)
+	_sub_lb.add_theme_color_override("font_color", Color(0.52, 0.64, 0.69, 0.95))
+	_sub_lb.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_sub_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(_sub_lb)
+	return box
 
 
-func _build_body() -> Control:
-	var pad := MarginContainer.new()
-	pad.name = "Body"
-	pad.add_theme_constant_override("margin_left", 14)
-	pad.add_theme_constant_override("margin_right", 14)
-	pad.add_theme_constant_override("margin_top", 12)
-	pad.add_theme_constant_override("margin_bottom", 12)
+## 三行「标签 …… 值」。用细横线隔开，读起来像一张规格表而不是对话框文案。
+func _build_info() -> Control:
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	pad.add_child(box)
+	box.name = "Info"
+	box.add_theme_constant_override("separation", 0)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	# ── 版本对比（两行左对齐：标签列固定宽度，值列自适应）──
-	box.add_child(_build_kv_row("当前版本", func(lb: Label) -> void: _cur_lb = lb))
+	# ⚠️ 「当前版本」整行要留引用：READY 态下玩家只关心「新版本已就绪」，
+	#    显示一个破折号或者旧版本号都是噪音（旧版这里就显示成了 "—"）。
+	_cur_hr = _hr()
+	box.add_child(_cur_hr)
+	_cur_row = _build_kv_row("当前版本", func(lb: Label) -> void: _cur_lb = lb)
+	box.add_child(_cur_row)
+	box.add_child(_hr())
 	box.add_child(_build_kv_row("最新版本", func(lb: Label) -> void: _new_lb = lb))
+	box.add_child(_hr())
+	return box
 
-	# ── 进度条（PROGRESS 态才显示）──
+
+func _hr() -> Control:
+	var line := ColorRect.new()
+	line.color = Color(0.22, 0.33, 0.37, 0.55)
+	line.custom_minimum_size = Vector2(0, 1)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return line
+
+
+## 一行「标签 …… 值」。标签定宽 96（4 个汉字 + 余量），值右对齐。
+## [WHY] 用 HBox + 两个 Label 而不是 `Label` 拼空格：中英混排下空格宽度不可控，
+##       长版本号会顶到标签上。
+func _build_kv_row(tag: String, bind: Callable) -> Control:
+	var row := HBoxContainer.new()
+	row.custom_minimum_size = Vector2(0, 52)
+	row.add_theme_constant_override("separation", 12)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var k := Label.new()
+	k.text = tag
+	k.custom_minimum_size = Vector2(110, 0)
+	FONT.fs(k, 16)
+	k.add_theme_color_override("font_color", Color(0.50, 0.61, 0.66, 0.95))
+	k.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	k.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(k)
+
+	var v := Label.new()
+	v.text = "—"
+	FONT.fs(v, 20)
+	v.add_theme_color_override("font_color", EveWindow.C_TEXT)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	v.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	v.autowrap_mode = TextServer.AUTOWRAP_OFF
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(v)
+	bind.call(v)
+	return row
+
+
+func _build_progress() -> Control:
+	var box := VBoxContainer.new()
+	box.name = "Progress"
+	box.add_theme_constant_override("separation", 8)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
 	_bar = ProgressBar.new()
 	_bar.name = "Bar"
 	_bar.custom_minimum_size = Vector2(0, BAR_H)
@@ -192,101 +232,76 @@ func _build_body() -> Control:
 	# ⚠️ `ProgressBar` 的两个样式槽名就叫 "background" / "fill"（不是 StyleBox 前缀），
 	#    写错名字不报错、只是不生效 —— 这条踩过。
 	var bbg := StyleBoxFlat.new()
-	bbg.bg_color = Color(0.09, 0.12, 0.14, 1.0)
-	bbg.border_color = Color(0.20, 0.28, 0.32, 0.9)
+	bbg.bg_color = Color(0.08, 0.11, 0.13, 1.0)
+	bbg.border_color = Color(0.22, 0.32, 0.36, 0.95)
 	bbg.set_border_width_all(1)
 	bbg.set_corner_radius_all(0)
 	_bar.add_theme_stylebox_override("background", bbg)
 	var bfg := StyleBoxFlat.new()
-	bfg.bg_color = Color(0.36, 0.68, 0.74, 1.0)
+	bfg.bg_color = Color(0.40, 0.72, 0.78, 1.0)
 	bfg.set_corner_radius_all(0)
 	_bar.add_theme_stylebox_override("fill", bfg)
 	box.add_child(_bar)
 
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
 	_pct_lb = Label.new()
 	_pct_lb.text = "0%"
-	FONT.fs(_pct_lb, 12)
-	_pct_lb.add_theme_color_override("font_color", Color(0.62, 0.82, 0.86, 0.95))
-	_pct_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	FONT.fs(_pct_lb, 28)
+	_pct_lb.add_theme_color_override("font_color", Color(0.62, 0.84, 0.88, 1.0))
+	_pct_lb.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_pct_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_pct_lb.autowrap_mode = TextServer.AUTOWRAP_OFF     # ③ 见文件顶注
-	box.add_child(_pct_lb)
+	row.add_child(_pct_lb)
 
 	_detail_lb = Label.new()
 	_detail_lb.text = ""
-	FONT.fs(_detail_lb, 11)
-	_detail_lb.add_theme_color_override("font_color", Color(0.55, 0.65, 0.70, 0.90))
-	_detail_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_detail_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_detail_lb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_detail_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	FONT.fs(_detail_lb, 14)
+	_detail_lb.add_theme_color_override("font_color", Color(0.52, 0.63, 0.68, 0.95))
 	_detail_lb.autowrap_mode = TextServer.AUTOWRAP_OFF
-	box.add_child(_detail_lb)
+	_detail_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(_detail_lb)
+	box.add_child(row)
+	return box
 
-	# ── 按钮行（右对齐：次要左、主要右，与 EveConfirmDialog 一致）──
+
+func _build_actions() -> Control:
 	var acts := HBoxContainer.new()
 	acts.name = "Actions"
-	acts.add_theme_constant_override("separation", 8)
+	acts.add_theme_constant_override("separation", 12)
 	acts.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(acts)
 
 	_btn_secondary = Button.new()
 	_btn_secondary.name = "Secondary"
 	_btn_secondary.text = "稍后"
-	_btn_secondary.custom_minimum_size = Vector2(0, 28)
+	_btn_secondary.custom_minimum_size = Vector2(0, BTN_H)
 	_btn_secondary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	EveButtonTheme.apply(_btn_secondary, "hud")
+	# ⚠️ `apply()` 内部会按皮肤设字号（hud = 11）⇒ 必须**在它之后**覆盖。
+	FONT.fs(_btn_secondary, 17)
 	_btn_secondary.pressed.connect(_on_secondary_pressed)
 	acts.add_child(_btn_secondary)
 
 	_btn_primary = Button.new()
 	_btn_primary.name = "Primary"
-	_btn_primary.text = "现在更新"
-	_btn_primary.custom_minimum_size = Vector2(0, 28)
+	_btn_primary.text = "立即更新"
+	_btn_primary.custom_minimum_size = Vector2(0, BTN_H)
 	_btn_primary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	EveButtonTheme.apply(_btn_primary, "hud_warn")
+	FONT.fs(_btn_primary, 17)
 	_btn_primary.pressed.connect(_on_primary_pressed)
 	acts.add_child(_btn_primary)
-
-	return pad
-
-
-## 一行「标签 : 值」。标签固定 72 宽（4 个汉字），值 `EXPAND_FILL`。
-## [WHY] 用 HBox + 两个 Label 而不是 `Label` 拼空格：中英混排下空格宽度不可控，
-##       长版本号会顶到标签上。
-func _build_kv_row(tag: String, bind: Callable) -> Control:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	var k := Label.new()
-	k.text = tag
-	k.custom_minimum_size = Vector2(72, 0)
-	FONT.fs(k, 11)
-	k.add_theme_color_override("font_color", Color(0.52, 0.62, 0.67, 0.90))
-	k.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(k)
-
-	var v := Label.new()
-	v.text = "—"
-	FONT.fs(v, 12)
-	v.add_theme_color_override("font_color", EveWindow.C_TEXT)
-	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.autowrap_mode = TextServer.AUTOWRAP_OFF
-	row.add_child(v)
-	bind.call(v)
-	return row
+	return acts
 
 
-func _draw_close_btn() -> void:
-	if _close_btn == null:
-		return
-	var c := _close_btn.size * 0.5
-	var col := Color(1.00, 0.70, 0.66, 0.98) if _close_hot \
-			else Color(0.62, 0.71, 0.75, 0.82)
-	var r := 3.6
-	_close_btn.draw_line(c + Vector2(-r, -r), c + Vector2(r, r), col, 1.6)
-	_close_btn.draw_line(c + Vector2(r, -r), c + Vector2(-r, r), col, 1.6)
+static func _spacer(h: int) -> Control:
+	var c := Control.new()
+	c.custom_minimum_size = Vector2(0, h)
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return c
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -296,19 +311,19 @@ func _draw_close_btn() -> void:
 ## 询问态：有新版，问要不要下。
 func show_ask(cur: String, new_ver: String, size_mb: float) -> void:
 	_cur_lb.text = "V" + cur
-	_new_lb.text = "V%s · %s" % [new_ver, _size_text(size_mb)]
+	_new_lb.text = "V%s  ·  %s" % [new_ver, _size_text(size_mb)]
 	_title_lb.text = "发现新版本"
+	_sub_lb.text = "更新包只包含脚本与数值，不重新下载美术资源。"
 	set_mode(Mode.ASK)
 	open()
 
 
-## 进度态。`allow_dismiss` = 是否给「后台继续」（老客户端由 EveUpdater 自己在下，
-## 面板只是观察者，答不 answering 都不影响下载 ⇒ 才允许收起）。
-func show_progress(cur: String, new_ver: String, allow_dismiss: bool) -> void:
+## 进度态。`allow_dismiss` 仅保留接口兼容 —— 开屏页上**永远不给收起**（见文件顶注 ②）。
+func show_progress(cur: String, new_ver: String, _allow_dismiss: bool) -> void:
 	_cur_lb.text = "V" + cur
 	_new_lb.text = "V" + new_ver
-	_title_lb.text = "正在下载更新"
-	_btn_secondary.visible = allow_dismiss
+	_title_lb.text = "正在更新"
+	_sub_lb.text = "请不要关闭游戏，完成后会提示你重启。"
 	set_mode(Mode.PROGRESS)
 	open()
 
@@ -324,9 +339,9 @@ func set_progress(pct: float, done: int, total: int) -> void:
 
 
 func show_ready(ver: String) -> void:
-	_title_lb.text = "更新已就绪"
 	_new_lb.text = "V" + ver
-	_detail_lb.text = "重启游戏后生效"
+	_title_lb.text = "更新已就绪"
+	_sub_lb.text = "新版本已经下载完成，重启游戏后生效。"
 	set_mode(Mode.READY)
 	open()
 
@@ -335,25 +350,36 @@ func show_error(msg: String, cur: String, new_ver: String) -> void:
 	_cur_lb.text = "V" + cur
 	_new_lb.text = "V" + new_ver
 	_title_lb.text = "更新失败"
-	_detail_lb.text = msg
+	_sub_lb.text = msg
+	_detail_lb.text = ""
 	set_mode(Mode.ERROR)
 	open()
 
 
 func set_mode(m: int) -> void:
 	_mode = m
-	_bar.visible = m == Mode.PROGRESS
-	_pct_lb.visible = m == Mode.PROGRESS
-	_detail_lb.visible = m == Mode.PROGRESS or m == Mode.READY or m == Mode.ERROR
+	var show_bar := m == Mode.PROGRESS
+	_bar.visible = show_bar
+	_pct_lb.visible = show_bar
+	# `_detail_lb` 只在进度态有意义（"499 KB / 1.13 MB"）。
+	# [WHY] READY / ERROR 态曾经也让它显示，结果和副标题撞在一起 ——
+	#       截图里「重启后生效」吊在按钮上方右侧，看着像另一行的残片。
+	_detail_lb.visible = show_bar
+	# READY 态隐藏「当前版本」整行：此刻玩家只关心新版本已就绪，
+	# 摆一个旧版本号（或破折号）纯属噪音。
+	var show_cur := m != Mode.READY
+	_cur_row.visible = show_cur
+	_cur_hr.visible = show_cur
 	match m:
 		Mode.ASK:
 			_btn_secondary.text = "稍后"
 			_btn_secondary.visible = true
-			_btn_primary.text = "现在更新"
+			_btn_primary.text = "立即更新"
+			_btn_primary.visible = true
 		Mode.PROGRESS:
-			_btn_secondary.text = "后台继续"
-			_btn_primary.text = "完成"
-			# 进度态的主按钮没意义（还没下完），先按「收起面板」
+			# 下载中两个按钮都不给：没有「取消」是因为半截包没有意义，
+			# 没有「关闭」是因为那正是用户抱怨的「只剩右下角小字」。
+			_btn_secondary.visible = false
 			_btn_primary.visible = false
 		Mode.READY:
 			_btn_secondary.text = "稍后重启"
@@ -404,30 +430,12 @@ func _on_secondary_pressed() -> void:
 		Mode.ASK:
 			close()
 			dismissed.emit()
-		Mode.PROGRESS:
-			# 只是收起面板，下载继续（进度看右下角那行小字，见 EveUpdater.status_text）
-			close()
 		Mode.READY:
 			close()
 		Mode.ERROR:
 			close()
-
-
-func _on_close_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed \
-			and event.button_index == MOUSE_BUTTON_LEFT:
-		_on_secondary_pressed()
-		accept_event()
-
-
-func _on_root_input(event: InputEvent) -> void:
-	# 点卡片外。⚠️ 下载中**不响应**：玩家手滑点空白就把进度条点没了，
-	# 会以为「更新被取消了」。只有 ASK / READY / ERROR 允许点外关闭。
-	if _mode == Mode.PROGRESS:
-		return
-	if event is InputEventMouseButton and event.pressed \
-			and event.button_index == MOUSE_BUTTON_LEFT:
-		_on_secondary_pressed()
+		Mode.PROGRESS:
+			pass    # 下载中不该走到这里（按钮已隐藏）
 
 
 static func _size_text(mb: float) -> String:

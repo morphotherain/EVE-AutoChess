@@ -189,8 +189,10 @@ func _begin_drag_visual() -> void:
 			board_auto = true
 		_arena.show_board_for_deploy()
 	# ── 布阵尺寸（2026-09-20 用户要求）──────────────────────────────
-	# 舰船切到布阵态（放大 BOARD_EXAGGERATION 倍，实测原尺寸只有 0.39 格宽，
-	# 连拖拽命中半径都点不中）。幂等，连续拖拽重复调用无害。
+	# 舰船切到布阵态（放大 BOARD_EXAGGERATION 倍；实测 1× 下护卫只有 0.2~0.3 格 /
+	# 20~30 px，连拖拽命中半径 PICK_RADIUS=60 都点不中）。
+	# 幂等，连续拖拽重复调用无害。
+	# [SRC] 分吨位实测见 docs/方案-准备阶段棋盘模式-2026-11-07.md 7.3 节
 	_arena.set_ships_board_mode(true)
 	# 从备战席拿的：格带上标出「这格被拿起了」，并让那一格**不画立绘**。
 	# （EveBenchRail._draw 按 dragging_index 跳过该格，否则会和幽灵重叠成两艘；
@@ -210,7 +212,7 @@ func update_drag(pos: Vector2) -> void:
 	var index := int(drag["index"])
 	var over_sell := _hud.sell_zone_rect().has_point(pos)
 	var bi := _hud.bench_slot_at(pos)
-	var cell: Vector2i = _arena.screen_to_cell(pos)
+	var cell: Vector2i = _drop_cell(pos)
 	var on_mine := cell.x >= 0 and _arena.board != null and _arena.board.is_mine_zone(cell.x)
 
 	# 落点判定所需的「事实」在这里现取（棋盘预览 / 备战席是否还有位），
@@ -241,6 +243,101 @@ func update_drag(pos: Vector2) -> void:
 	_hud.set_drag_ghost(ghost_payload(drag))
 
 
+## 指针落点 → 目标格。**拖动高亮与松手动作共用这一个入口**（同源原则：
+## 高亮就是承诺，只能有一个地方决定"落在哪"）。
+##
+## ★★ 2026-11-07「吸到船体」（玩家要的是「把 A 拖到 B 身上」）：
+##   布阵态舰船放大 3 倍后，船体在屏幕上远大于它占的那一格
+##   （战列实测竖跨约 3.4 格、投影 284px，见 docs 第 7.3 节）。
+##   玩家按直觉把 A 按在 B 的船体上松手时，指针的**格**经常是 B 的邻格甚至空行
+##   ⇒ A 被放到旁边，看起来像「互换没生效」。
+##   所以：指针落在某艘船**投影出来的轮廓**里时，目标就算那艘船的格子。
+##
+## ⛔ 只在准备阶段吸。结算期棋盘已收起、船只是画面残留，
+##   吸过去会把「拖去出售」的手感弄钝（结算期本来也不允许挪位）。
+## ⚠️ 先判「指针压在谁的格子上」：那是最具体的答案（含空格），
+##    只有落在空子上才去问"是不是指着某艘船的轮廓"。
+##
+## ⚠️⚠️ 两条**不许吸**的红线（都是踩得到的）：
+##   ① 指针**不在棋盘上**（格号 x < 0 = 备战席 / 商店 / 画外）⇒ 直接返回。
+##      否则「拖回备战席」会被船体吸走变成"挪回棋盘"，那是功能倒退。
+##   ② 指针格与那艘船的格子**相邻**（±1 行/列内）⇒ 不吸。
+##      「把这艘挪到它旁边」是最常见的动作，而相邻格常常正好被它的船体盖住；
+##      吸过去就会变成互换 —— 手感比"没吸"更糟。
+##      只有隔了 ≥2 格还落在船体轮廓里，才说明玩家真的是在指那艘船。
+func _drop_cell(pos: Vector2) -> Vector2i:
+	var cell: Vector2i = _arena.screen_to_cell(pos)
+	if _run == null or _run.phase != EveRunState.Phase.PREP:
+		return cell
+	if _arena.board == null:
+		return cell
+	# 红线①：不在棋盘上，一律按原样返回
+	if cell.x < 0:
+		return cell
+	if _arena.board.is_mine_zone(cell.x) and _run.field_index_at(cell.x, cell.y) >= 0:
+		return cell
+	var dragged_id := int(drag.get("ship_id", -1))
+	var ships: Array = _own_ships_cb.call()
+	var fmap: Array = _own_field_index_cb.call()
+	var entries := _run.field_entries()
+	for i in ships.size():
+		if i >= fmap.size():
+			break
+		var ship: EveShip = ships[i]
+		if ship == null or not ship.alive:
+			continue
+		if int(ship.id) == dragged_id:
+			continue
+		var visual = _arena.get_ship_visual(ship.id)
+		if visual == null or not is_instance_valid(visual) \
+				or not visual.has_method("hull_world_aabb"):
+			continue
+		var bb: AABB = visual.hull_world_aabb()
+		if bb.size == Vector3.ZERO:
+			continue
+		if not _screen_rect(bb).has_point(pos):
+			continue
+		var fi: int = fmap[i]
+		if fi < 0 or fi >= entries.size():
+			continue
+		var c = entries[fi].get("cell", Vector2i(-1, -1))
+		if not (c is Vector2i) or c.x < 0:
+			continue
+		# 红线②：相邻格不吸
+		if maxi(absi(int(c.x) - cell.x), absi(int(c.y) - cell.y)) <= 1:
+			return cell
+		return c
+	return cell
+
+
+## 世界空间包围盒 → 屏幕矩形（8 个角都投一次，取 min/max）
+##
+## ⚠️ 相机后面的角必须跳过：`unproject_position` 对身后的点会给出**镜像坐标**，
+##    不跳过的话包围盒会突然横跨整个屏幕，吸船范围就变成"全屏"。
+func _screen_rect(bb: AABB) -> Rect2:
+	# ⚠️ 用 arena 自己的 `camera`，不要 `orion_cam.camera`
+	#    —— 两者现阶段是同一个，但 `camera` 是 arena 的公开接口
+	#    （`world_to_screen` 也是它），走接口才不会在换相机时悄悄失效。
+	var cam: Camera3D = _arena.get("camera")
+	if cam == null:
+		return Rect2()
+	var mn := Vector2(INF, INF)
+	var mx := Vector2(-INF, -INF)
+	for k in 8:
+		var p := bb.position + Vector3(
+			bb.size.x if (k & 1) != 0 else 0.0,
+			bb.size.y if (k & 2) != 0 else 0.0,
+			bb.size.z if (k & 4) != 0 else 0.0)
+		if cam.is_position_behind(p):
+			continue
+		var s: Vector2 = _arena.world_unit_to_screen(p)
+		mn = mn.min(s)
+		mx = mx.max(s)
+	if mn.x == INF:
+		return Rect2()
+	return Rect2(mn, mx - mn)
+
+
 ## 「松手会怎样」的**纯规则**：把所有落点的分支收在这一处，输入是事实、输出是文案。
 ##
 ## ⚠️ 这是**玩家可见文案的唯一来源** —— 被拒的静默路径必须给「指对方向」的理由
@@ -261,6 +358,13 @@ static func resolve_hint(source: StringName, over_sell: bool, on_mine: bool,
 	if on_mine:
 		var ok := bool(place.get("ok", false))
 		if ok:
+			# ★★ 2026-11-07：落点有船 ⇒ 互换。
+			#    ⚠️ 必须**点名**「与谁换」：只说「移动到这里」的话，玩家看不出
+			#    这一格有船、也看不出他的船会被顶去备战席（名额不变但位置变了）。
+			#    这是唯一一处能提前告诉他的地方。
+			if bool(place.get("swap", false)):
+				return {"hint": "与 %s 互换位置" % String(place.get("swap_name", "该船")),
+						"ok": true}
 			if source == &"bench":
 				return {"hint": "部署到 第 %d 行第 %d 列" % [cell.x + 1, cell.y + 1], "ok": true}
 			return {"hint": "移动到这里", "ok": true}
@@ -309,8 +413,11 @@ func is_tap(pos: Vector2) -> bool:
 ## 都没动**，调用方应该接着做「选中这艘船」。false = 真拖放，动作已执行。
 ##
 ## ⚠️ 点选必须**跳过落点动作**，不能"先原地落一下再选"：
-##    场上的船原地 move_field 到自己格子会被 `_cell_taken()` 判成占用，
-##    往日志里甩一条「这一格已被占用」；玩家只是点了一下，却收到一句报错。
+##    玩家只是点一下，不该产生任何编制写入与日志。
+##    （2026-11-07 之前这条后果更严重：场上的船原地 `move_field` 到自己格子被
+##     `_cell_taken()` 判成占用 ⇒ 点一下却收到一句「这一格已经被船了」。
+##     现在「落点有船 = 互换」之后自己拖自己已是合法 no-op，但那条日志仍是噪音，
+##     所以这条规则不变：点选 ≠ 拖放。）
 func end_drag(pos: Vector2) -> bool:
 	if drag.is_empty():
 		return false
@@ -324,7 +431,10 @@ func end_drag(pos: Vector2) -> bool:
 	var entry: Dictionary = drag.get("entry", {})
 	var ship_id := int(drag.get("ship_id", -1))
 	var resolve_stage := _run.phase == EveRunState.Phase.RESOLVE
-
+	# ⚠️ 落点格也必须在 `finish_drag()` **之前**算：`_drop_cell()` 要读 `drag` 里的
+	#    `ship_id` 来排除"被拖的那一艘自己"（否则它的轮廓会被当成吸船目标，
+	#    结果永远是"落回原格"）。`finish_drag()` 之后 drag 就空了。
+	var cell_hit: Vector2i = _drop_cell(pos)
 	# ⚠️ 顺序不能反：**先清拖动状态，再执行落点动作**。
 	#    因为动作会 emit changed，而 _refresh_run_ui 在「拖动中」是跳过舰队重建的。
 	#    先动作后清理的话：船确实上前了（数据对了），但战场上不会出现它 ——
@@ -350,7 +460,7 @@ func end_drag(pos: Vector2) -> bool:
 		if bool(res.get("ok", false)) and source == &"field" and resolve_stage:
 			_drop_sold_visual(ship_id)
 	else:
-		var cell: Vector2i = _arena.screen_to_cell(pos)
+		var cell := cell_hit
 		var on_mine := cell.x >= 0 and _arena.board != null and _arena.board.is_mine_zone(cell.x)
 		if on_mine:
 			if source == &"bench":
@@ -412,13 +522,21 @@ func finish_drag() -> void:
 	_hud.set_sell_hot(false)
 	if _arena.board != null:
 		_arena.board.clear_highlight()
-		if board_auto and _arena.board.visible:
-			# 走 hide_board()（不是 board.set_board_visible）——
-			# 取景交回 _process 的舰队跟随，那条路径同样是平滑的，不会跳。
-			_arena.hide_board()
+	# ★★ 2026-11-07（玩家反馈）：「拖动的时候有放大，这很好，但不拖的时候太小」
+	#    ⇒ 棋盘与布阵放大都改成**常驻**（由 `begin_prep()` 立起来，
+	#      由 `hide_board()` 收回去），放下这一次**什么都不收**。
+	#
+	#    ⛔ 别把下面两行加回来：
+	#         _arena.hide_board()
+	#         _arena.set_ships_board_mode(false)
+	#       它们的合并效果是「松手瞬间船缩回 1/3」—— 实测（真实分散布阵，1080p）：
+	#         护卫 kestrel  86×64 px → 29×22 px
+	#         驱逐 catalyst 143×48 px → 49×16 px
+	#         战列 abaddon  108×284 px → 37×95 px
+	#       护卫缩到 20~30px 就是玩家说的「太小看不清」。
+	#       [SRC] 数据出自 docs/方案-准备阶段棋盘模式-2026-11-07.md 第 7.3 节
+	#       （A/B 截图 docs/img/board-ab-1x.png / board-ab-3x.png）
 	board_auto = false
-	# 舰船退出布阵态，回到战斗尺寸（与 _begin_drag_visual 的进入成对）
-	_arena.set_ships_board_mode(false)
 
 
 ## 把一份新状态**并入**主控持有的字典（⛔ 不能整体替换，见顶注）。

@@ -44,6 +44,7 @@ func _ready() -> void:
 	_t_resolve()
 	_t_origin()
 	_t_platform_guard()
+	_t_screen_filled()
 	await _t_settings_profile()
 	await _t_lounge_table()
 	await _t_menu_layer()
@@ -198,6 +199,55 @@ func _t_platform_guard() -> void:
 		_ok(get_window().size == saved_size and get_window().position == saved_pos,
 				"无头下强行 apply_index(4K) ⇒ 窗口尺寸/位置一点没变（%s）"
 				% str(get_window().size))
+
+
+# ---------------------------------------------------------------- [4.5] 全屏只改清晰度
+
+## ★★ 2026-11-08：全屏 / 最大化下改分辨率档**不许动窗口**。
+##
+## 玩家报的现象：把窗口最大化（看着就是全屏）后点分辨率档 ⇒ 窗口被缩回档位
+## 大小、退出最大化 ⇒ 右边下边露出大片桌面（截图坐实）。
+## 修法：全屏 / 最大化分支**只写 `scaling_3d_scale`**（3D 渲染精度），窗口一个
+## 字节都不碰。这一段钉三件事：
+##   ① 三种「尺寸不归我们管」的窗口模式都认（漏一个就漏一条黑边路径）；
+##   ② 倍率换算对（含 4:3 档落在 16:9 屏上那种非等比情况）；
+##   ③ 全屏分支**真的不动 size**（这条是本次 bug 的正题）。
+##
+## ⚠️ 用**未入树的 `Window.new()`** 造样本：入树会真去开一个 OS 窗口，无头下没有
+##    显示服务（实测 `--script` 直接挂死）。未入树的 Window 上 `mode` / `size` /
+##    `scaling_3d_scale` 都是纯属性读写，正好够验判定与换算。
+func _t_screen_filled() -> void:
+	print("[4.5] ★★ 全屏 / 最大化 ⇒ 只改 3D 渲染精度，不动窗口")
+	_ok(not RES.is_screen_filled(null), "null ⇒ 不当作全屏（防御）")
+	var w := Window.new()
+	w.size = Vector2i(1920, 1080)
+	_ok(not RES.is_screen_filled(w),
+			"默认 WINDOWED ⇒ 不是全屏（mode=%d）" % w.mode)
+	w.mode = Window.MODE_MAXIMIZED
+	_ok(RES.is_screen_filled(w), "★★ MODE_MAXIMIZED ⇒ 认（玩家最常遇到的那个）")
+	var before := w.size
+	RES.apply_render_scale(w, 5)
+	_ok(w.size == before,
+			"★★ 全屏分支**不动窗口尺寸**（%s ⇒ %s）—— 这就是黑边 bug 的正题"
+			% [str(before), str(w.size)])
+	# 1366×768 档落在 1920×1080 的画面上：高度方向更紧 ⇒ 取 768/1080
+	_ok(absf(w.scaling_3d_scale - 768.0 / 1080.0) < 0.002,
+			"换算取两边更小的比例（1366×768 / 1920×1080 ⇒ %.4f，期望 %.4f）"
+			% [w.scaling_3d_scale, 768.0 / 1080.0])
+	RES.apply_render_scale(w, 0)
+	_ok(is_equal_approx(w.scaling_3d_scale, RES.MAX_RENDER_SCALE),
+			"4K 档跑在 1080p 全屏 ⇒ 夹到引擎上限 %.2f（超采样）"
+			% RES.MAX_RENDER_SCALE)
+	RES.reset_render_scale(w)
+	_ok(is_equal_approx(w.scaling_3d_scale, 1.0), "归位 ⇒ 1.0（原生分辨率）")
+	w.mode = Window.MODE_FULLSCREEN
+	_ok(RES.is_screen_filled(w), "MODE_FULLSCREEN ⇒ 认")
+	w.mode = Window.MODE_EXCLUSIVE_FULLSCREEN
+	_ok(RES.is_screen_filled(w), "MODE_EXCLUSIVE_FULLSCREEN ⇒ 认")
+	w.mode = Window.MODE_WINDOWED
+	_ok(not RES.is_screen_filled(w),
+			"★ 回到 WINDOWED ⇒ 不再算全屏（否则窗口模式下也改不了窗口尺寸）")
+	w.free()
 
 
 # ---------------------------------------------------------------- [5] 设置窗两套档案

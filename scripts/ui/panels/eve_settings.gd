@@ -195,6 +195,12 @@ var _scale_btns: Array[Button] = []
 ## 分辨率档按钮（**只有桌面端才建** ⇒ 移动端这里是空的，别当成 bug）
 ## ⚠️ 顺序 = [自适应] + `CHOICES` ⇒ **下标比 CHOICES 大 1**（见 `set_resolution`）。
 var _res_btns: Array[Button] = []
+## ★ 2026-11-08 分辨率块下面那行小字。
+##
+## ⚠️ 必须留引用：全屏 / 最大化下分辨率档的**语义变了**（只调 3D 清晰度、
+##    不动窗口，见 `EveResolution.MIN_RENDER_SCALE` 顶注）。玩家不看这一行
+##    会发现"点了没变化"，只会当成**按钮坏了**（红线 9）。
+var _res_note: Label = null
 ## ★ 2026-10-10 「重置」区那行说明（默认显示快捷键提示，点过重置后变成「已恢复」）。
 var _reset_note: Label = null
 ## 本窗认为的缩放档（存档原值，0 = 自动）
@@ -872,11 +878,12 @@ func _build_display_rows() -> Array:
 		#    不解释一下玩家会以为是某种星级。
 		# ⚠️ 这一行**必须短**：窗宽只有 320，「太长 + ⛔禁止 autowrap」会直接被裁掉。
 		var note := Label.new()
-		note.text = T.t("SET_RES_NOTE", "★ = 推荐档 · 自适应 = 跟随屏幕")
 		note.add_theme_color_override("font_color", C_TEXT_FAINT)
 		FONT.fs(note, 9)
 		note.autowrap_mode = TextServer.AUTOWRAP_OFF
 		note.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_res_note = note
+		_refresh_res_note()
 		rows.append(note)
 
 	if UI_SCALE_SCRIPT.is_enabled():
@@ -1203,6 +1210,22 @@ func set_font_scale(v: float) -> void:
 	(_font_slider["num"] as Label).text = "%d%%" % int(round(s * 100.0))
 
 
+## 刷新分辨率块下面那行小字 —— **按窗口当前状态说人话**。
+##
+## ★ 2026-11-08 为什么需要它：全屏 / 最大化时点分辨率档**不改窗口**，
+##   只改 3D 渲染精度（见 `EveResolution.apply_index`）。如果还写着
+##   「自适应 = 跟随屏幕」，玩家会以为窗口该变小却没变 ⇒ 判定成按钮坏了（红线 9）。
+##
+## ⚠️ 两种文案都**必须短**：窗宽 320、9px 字、禁止 autowrap ⇒ 超了就是被裁。
+## ⛔ 别在这里顺带去改窗口/档位 —— 本函数只负责文案。
+func _refresh_res_note() -> void:
+	if _res_note == null:
+		return
+	var filled := RESOLUTION_SCRIPT.is_screen_filled(get_window())
+	_res_note.text = "全屏中：只调 3D 清晰度" if filled \
+			else T.t("SET_RES_NOTE", "★ = 推荐档 · 自适应 = 跟随屏幕")
+
+
 ## 窗口分辨率档。**本窗自己就把窗口改了**（`EveResolution.apply_index`），
 ## 不再让上层各写一遍尺寸逻辑（战斗场景与牌桌都要它 ⇒ 抄两份必然漂移）。
 ##
@@ -1238,6 +1261,7 @@ func set_resolution(idx: int) -> void:
 	var pick := 1 + clampi(idx, 0, RESOLUTION_SCRIPT.CHOICES.size() - 1)
 	for i in _res_btns.size():
 		EveButtonTheme.apply(_res_btns[i], "hud_main" if i == pick else "hud")
+	_refresh_res_note()
 
 
 ## 高亮「自适应」档（**只改外观，不发信号**）。
@@ -1250,6 +1274,7 @@ func set_resolution_auto() -> void:
 		return
 	for i in _res_btns.size():
 		EveButtonTheme.apply(_res_btns[i], "hud_main" if i == 0 else "hud")
+	_refresh_res_note()
 
 
 # ------------------------------------------------------------------ 重置
@@ -1466,6 +1491,7 @@ func _rebuild_contents() -> void:
 	_dbg_box = null
 	_dbg_btn = null
 	_reset_note = null
+	_res_note = null
 	_font_slider = {}
 	_cur_tab = "video"
 	_build_contents()

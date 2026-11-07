@@ -52,6 +52,7 @@ func _ready() -> void:
 	_t_combat_ids()
 	_t_fleet_factory()
 	_t_deploy_rules()
+	_t_swap_cells()
 	print("")
 	print("═══ RESULT passed=%d failed=%d ═══" % [_pass, _fail])
 	print("VERIFY_DONE failed=%d" % _fail)
@@ -689,3 +690,90 @@ func _t_deploy_rules() -> void:
 			"hint": "移动到这里", "hint_ok": true})
 	_ok(bool(g["active"]) and String(g["name"]) == "测试舰级" and bool(g["hint_ok"]),
 			"ghost_payload 字段映射正确（active/name/hint_ok）")
+
+	# ★★ 2026-11-07 互换：落点有船时提示必须**点名对方**，不能还是「移动到这里」
+	r = DEPLOY.resolve_hint(field, false, true,
+			{"ok": true, "swap": true, "swap_name": "死亡旋涡级"},
+			false, false, 0, 8, far, 12)
+	_ok(bool(r["ok"]) and String(r["hint"]) == "与 死亡旋涡级 互换位置",
+			"互换：点名对方（%s）" % r["hint"])
+	r = DEPLOY.resolve_hint(bench, false, true,
+			{"ok": true, "swap": true, "swap_name": "鲲鹏级"},
+			false, false, 0, 8, far, 12)
+	_ok(bool(r["ok"]) and String(r["hint"]).contains("鲲鹏级")
+			and not String(r["hint"]).contains("部署到"),
+			"互换：备战席起点也走互换文案（%s）" % r["hint"])
+
+
+## 互换位子 —— 2026-11-07 玩家要求：
+##   「棋盘上的船需要能互换位子。现在需要三个步骤去调位子，太过于麻烦。」
+##
+## 验四件事：① 场上↔场上 两艘格号对调、数量不变
+##          ② 拖回自己那一格是合法 no-op（不该再报「这一格已经有船了」）
+##          ③ 备战席→占用格：进场，被顶掉的回**腾出来的那个备战席格**，两边数量都不变
+##          ④ 满员时照样能换（互换不占新人口 ⇒ 不能拿 field_limit 卡它）
+##          ⑤ `preview_place` 与实做同口径（占用格 ok + swap；空格不带 swap）
+func _t_swap_cells() -> void:
+	print("── 互换位子（拖到已有船的格子）──")
+	var st := _new_run(77)
+	st.level = 4
+	st.field.clear()
+	st.bench.clear()
+	st.field.append({"ship_key": &"punisher", "star": 1, "cell": Vector2i(8, 5)})
+	st.field.append({"ship_key": &"kestrel", "star": 1, "cell": Vector2i(9, 2)})
+
+	# ① 场上 ↔ 场上
+	var r := st.move_field(0, 9, 2)
+	_ok(bool(r.get("ok", false)) and bool(r.get("data", {}).get("swap", false)),
+			"场上↔场上：允许落，且标了 swap")
+	_ok(st.field[0].get("cell") == Vector2i(9, 2)
+			and st.field[1].get("cell") == Vector2i(8, 5),
+			"场上↔场上：两艘格号对调（%s / %s）" % [
+				str(st.field[0].get("cell")), str(st.field[1].get("cell"))])
+	_ok(st.field.size() == 2, "场上↔场上：上场数不变（%d）" % st.field.size())
+
+	# ② 拖回自己那一格
+	r = st.move_field(0, 9, 2)
+	_ok(bool(r.get("ok", false)) and not bool(r.get("data", {}).get("swap", false)),
+			"拖回自己格：ok 且不算 swap（旧版这里会报「这一格已经有船了」）")
+
+	# ③ 备战席 → 占用的格
+	st.bench.append({"ship_key": &"kestrel", "star": 2, "cell": Vector2i(-1, -1)})
+	var bench_before := st.bench.size()
+	var field_before := st.field.size()
+	r = st.deploy_from_bench(0, 9, 2)          # (9,2) 上现在是 punisher
+	_ok(bool(r.get("ok", false)) and bool(r.get("data", {}).get("swap", false)),
+			"备战席→占用格：允许落，且标了 swap")
+	_ok(st.bench.size() == bench_before, "备战席→占用格：备战席数量不变（%d）" % st.bench.size())
+	_ok(st.field.size() == field_before, "备战席→占用格：上场数不变（%d）" % st.field.size())
+	_ok(StringName(st.bench[0].get("ship_key", &"")) == &"punisher"
+			and st.bench[0].get("cell") == Vector2i(-1, -1),
+			"备战席→占用格：被顶掉的那艘回腾出来的备战席格（%s @ %s）" % [
+				String(st.bench[0].get("ship_key", "?")), str(st.bench[0].get("cell"))])
+	_ok(StringName(st.field[0].get("ship_key", &"")) == &"kestrel"
+			and st.field[0].get("cell") == Vector2i(9, 2),
+			"备战席→占用格：进场的那艘真的落在 (9,2)")
+
+	# ④ 满员时照样能换
+	st.field.clear()
+	st.bench.clear()
+	for i in st.field_limit():
+		st.field.append({"ship_key": &"punisher", "star": 1, "cell": Vector2i(8, i)})
+	st.bench.append({"ship_key": &"kestrel", "star": 1, "cell": Vector2i(-1, -1)})
+	r = st.deploy_from_bench(0, 8, 3)
+	_ok(bool(r.get("ok", false)) and bool(r.get("data", {}).get("swap", false)),
+			"满员（%d／%d）时仍可互换 —— 换人不换人口" % [st.field.size(), st.field_limit()])
+	_ok(st.field.size() == st.field_limit(), "满员互换后上场数不变（%d）" % st.field.size())
+
+	# ⑤ 预览与实做同口径
+	var pv := st.preview_place(8, 2, &"field", 0)
+	_ok(bool(pv.get("ok", false)) and bool(pv.get("swap", false))
+			and String(pv.get("swap_name", "")) != "",
+			"预览：占用格可落 + 带 swap_name（%s）" % String(pv.get("swap_name", "")))
+	var pv2 := st.preview_place(8, 3, &"bench", 0)
+	_ok(bool(pv2.get("ok", false)) and bool(pv2.get("swap", false)),
+			"预览：备战席→占用格也报 swap")
+	var pv3 := st.preview_place(10, 9, &"field", 0)
+	_ok(bool(pv3.get("ok", false)) and not bool(pv3.get("swap", false)),
+			"预览：空格不带 swap")
+

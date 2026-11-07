@@ -24,6 +24,10 @@ class_name EveShipVisual
 var ship: EveShip = null
 var hull_root: Node3D = null
 var label_root: Node3D = null
+## 舰体模型根（`Model_<key>`）—— 只给 `hull_world_aabb()` 用。
+## ⚠️ 别拿 `hull_root` 代替它：`hull_root` 下还挂着护盾特效与喷口，
+##    量出来的包围盒会把护盾椭球算进去（比船体大一圈，见 2026-11-07 实测）。
+var model_root: Node3D = null
 
 var _shield_bar: MeshInstance3D = null
 var _armor_bar: MeshInstance3D = null
@@ -154,12 +158,18 @@ const BAR_SCALE := 1.0
 ##    玩家此刻要的就是「看清自己在拖哪一艘」—— 两个场景诉求不同，
 ##    所以拆成两个态，由 set_board_mode() 切换。
 ##
-## ⚠️ 3.0 的代价（如实记录，**2026-09-28 随体型刻度改动同步更新**）：
-##    现在最大的一艘是**战列** `灾难级`（系数 1.4175）⇒
-##    2.6 × 1.4175 × 1.2 × 3 ≈ **13.3 世界单位 = 2.21 格**，超出单格宽度，
-##    邻格放船时轮廓会相交。
-##    （旧口径是「巡洋 1.35 ⇒ 12.6 单位 = 2.1 格」；改动后上限只大了 5%。）
-##    若要「绝不跨格」，上限是 2.0（0.77 格）。改这一个数即可。
+## ⚠️ 3.0 的代价（如实记录，**2026-11-07 用实测量测校正过**）：
+##    公式推算：最大一艘战列 `灾难级`（系数 1.4175）⇒
+##    2.6 × 1.4175 × 1.2 × 3 ≈ **13.3 世界单位 = 2.21 格**。
+##    ⚠️ 但**实测**（1920×1080 棋盘取景，只量 `Model_*` 子树的投影 AABB）
+##    战列 abaddon 的世界包围盒 z = **20.51 单位 = 3.42 格**，投影 108×284 px
+##    —— 比公式推算大 1.5 倍。
+##    [WHY] 公式里的 2.6「基准船长」只是船体主段，模型自身还带着伸出的艏艉/翼板；
+##          「看着多大」是 AABB 说了算，不是主段长度说了算。
+##    [SRC] `docs/方案-准备阶段棋盘模式-2026-11-07.md` 第 7.3 / 7.4 节
+##    ⇒ 实测口径下，战列摆在最后一行时船尾会越过棋盘下沿约 130px（被商店面板压住）。
+##    若要「绝不跨格」，上限是 2.0（0.77 格）。改这一个数即可；
+##    ⛔ 但别改成「按船大小钳制倍率」—— 那会破坏吨位可比性（2026-09-28 定案）。
 const BOARD_EXAGGERATION := 3.0
 
 ## 血条与标签悬浮在船体上方的基准高度（本地空间，会再乘 label_root.scale）
@@ -300,6 +310,43 @@ func _apply_scale() -> void:
 	#    布阵态跟着乘 mul：那时玩家在「看清这一艘」，信息层放大是收益。
 	if label_root != null:
 		label_root.scale = Vector3.ONE * (_visual_scale * BAR_SCALE * mul)
+
+
+## 船体在**世界空间**的包围盒 —— 「玩家眼睛看到的那个轮廓」。
+##
+## ★ 2026-11-07 为什么要它（拖放互换）：
+##   布阵态舰船放大 3 倍后，船体在屏幕上远大于它占的那一格
+##   （战列实测竖跨 3.4 格、投影 284px）。玩家按「把 A 拖到 B 身上」的直觉松手时，
+##   指针往往落在 B 的**邻格**，于是 A 被放到旁边 —— 看起来像「互换没生效」。
+##   ⇒ 用这个包围盒做「指针是否指着这艘船」的判据，比按格判定符合直觉。
+##
+## ⚠️ 只遍历 `model_root`（`Model_<key>`）：
+##    `hull_root` 下还有 `ShieldImpacts`（护盾椭球，比船体大一圈）与喷口，
+##    混进来会让"船"凭空大一号，吸船范围跟着虚胖。
+## ⚠️ 返回的是**世界单位**（渲染层），不是仿真层的米。
+func hull_world_aabb() -> AABB:
+	# ⚠️ 用 `is_instance_valid`，不能写 `== null`：
+	#    占位体那条分支里 `model` 已经 `queue_free()`，留下的是"非 null 的
+	#    已释放对象"，`== null` 判为 false，接着递归就会访问野指针。
+	#    那种船没有真实模型 ⇒ 返回空盒 = 不参与"吸到船体"（按格判定照旧）。
+	if not is_instance_valid(model_root):
+		return AABB()
+	var acc := AABB()
+	var has := false
+	var stack: Array[Node] = [model_root]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
+			var mi := n as MeshInstance3D
+			var a: AABB = mi.global_transform * mi.get_aabb()
+			if has:
+				acc = acc.merge(a)
+			else:
+				acc = a
+				has = true
+		for ch in n.get_children():
+			stack.append(ch)
+	return acc if has else AABB()
 
 
 # ------------------------------------------------------------------ 舰体
@@ -614,11 +661,16 @@ func _capture_bow_axes(geo_basis: Basis, bow_local: Vector3, up_local: Vector3) 
 ##   做法与 2D 立绘一致 —— **先归一化到统一参照长，再按吨位档放大**
 ##   （2D 那边按 alpha 包围盒归一化，见 MEMORY；3D 这边按 max_dim_m）。
 func _build_hull_model(model: Node3D) -> void:
+	model_root = model
 	var span_m := EveShipModel.max_dim_m(ship.ship_key)
 	if span_m <= 0.001:
 		# 索引里查不到尺寸（理论上不会：索引 52 行齐全）→ 退回占位体，
 		# 别用猜出来的缩放把船摆成巨人或跳蚤。
 		model.queue_free()
+		# ⚠️ 必须清掉引用：`queue_free()` 是**延迟**删除，指针会变成"非 null 的
+		#    已释放对象"——`if model_root == null` 判不出来，再去 `.get_children()`
+		#    就是访问野指针。`hull_world_aabb()` 因此改用 `is_instance_valid()` 判。
+		model_root = null
 		_build_hull_boxes()
 		return
 	# ⚠️⚠️ 这里**绝对不能**乘 METERS_PER_UNIT —— 踩过，症状是「一层巨大的
