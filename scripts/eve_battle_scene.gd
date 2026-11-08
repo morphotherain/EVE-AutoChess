@@ -2222,6 +2222,25 @@ func debug_flush_result_popup() -> void:
 var _cam_dragged := false
 
 func _input(event: InputEvent) -> void:
+	# ★★ 2026-11-08（玩家反馈「空格会重复上一次点过的按钮」）——空格前哨。
+	#
+	#    Godot 的 BaseButton 只要拿到键盘焦点，就在 `_gui_input` 里把
+	#    「空格 / 回车」当自己的点击（focus_mode 默认 FOCUS_ALL）。
+	#    鼠标点过「↻ 刷新」之后它就攥着焦点 ⇒ 按空格 = 又刷一次、还扣钱；
+	#    点过「▲ 等级加速」⇒ 空格又升一级。
+	#
+	#    这里**只摘焦点、不吞事件**：`release_focus()` 之后按钮的
+	#    `has_focus()` 为 false，它在 GUI 阶段就不认这个空格了；
+	#    事件继续往下走，正常落到 `_unhandled_input()` 的暂停分支。
+	#    ⛔ 千万别改成 `set_input_as_handled()` —— 那会连暂停一起吃掉。
+	#
+	#    HUD 侧另有一道（`eve_hud_root._on_gui_focus_changed`，拿到焦点即交还），
+	#    两道互不冲突：焦点已空时 `gui_get_focus_owner()` 返回 null，这里什么也不做。
+	if event is InputEventKey and event.pressed and not event.echo \
+			and (event as InputEventKey).keycode == KEY_SPACE:
+		var focus_owner := get_viewport().gui_get_focus_owner()
+		if focus_owner is BaseButton:
+			focus_owner.release_focus()
 	# 只在「正在拖船」时抢事件；其余一概不碰（让相机与 GUI 各司其职）
 	if _drag.is_empty():
 		return

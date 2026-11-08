@@ -192,6 +192,13 @@ var settings_window: EveWindow = null
 ## 全屏暂停遮罩（阶段 D+；平时隐藏）。见 `set_paused()` 的口径说明。
 var pause_veil: Control = null
 var bench_rail: EveBenchRail          ## 备战席轨道（非窗口）
+## 当前阶段（0 准备 / 1 战斗 / 2 结算）—— 与顶条 `command_bar.phase` 同源。
+##
+## ⚠️ 本类需要它做一件事：**决定备战席金线要不要读秒**。
+##    只有准备阶段的倒计时才是「备战席还能操作多久」；战斗阶段的顶条走的是
+##    战斗时限，那两件事毫不相干 —— 让金线跟着战斗时限收缩，
+##    玩家会以为备战席快要没了。
+var _phase: int = 0
 ## 伤害数字层（阶段 D）—— 屏幕空间的飘字，压在所有窗口之上、幽灵之下。
 var damage_feed: Control = null
 ## ★ 2026-10-30：战斗播报条（中央靠上 3 行）。与飘字分属两层，见脚本顶注。
@@ -316,8 +323,38 @@ func _ready() -> void:
 	#   桌面端 `_on_resized()` 会立刻返回 —— 它的布局是设计稿的绝对坐标，
 	#   跟视口无关（这也是「Windows 端逐像素不变」的一部分）。
 	resized.connect(_on_resized)
+	# ★★ 2026-11-08（玩家反馈「空格会重复上一次点过的按钮」）：
+	#    Godot 的 BaseButton 默认 `focus_mode = FOCUS_ALL` ⇒ 鼠标点过哪个按钮，
+	#    哪个按钮就**拿走了键盘焦点**；此后按空格 = 又按了它一次。
+	#    实测症状：点完商店「↻ 刷新」再按空格想暂停 —— 结果是又刷了一次（还扣钱）；
+	#    点过「▲ 等级加速」再按空格 —— 又升了一级。空格在这里的语义只能是
+	#    「暂停/继续」（顶条写的就是这个），不该被任何按钮截走。
+	#
+	# ⚠️ 为什么挂 Viewport 的 `gui_focus_changed` 而不是逐个设 `focus_mode`：
+	#    商店卡 / 事件四选一 / 战利品 / 设置行里的按钮全是**运行时动态重建**的，
+	#    逐个设置必然漏（漏一个就复现一次这个 bug）。这里在「拿到焦点」的瞬间
+	#    统一交还，覆盖全树且与后面的动态创建立刻自洽。
+	get_viewport().gui_focus_changed.connect(_on_gui_focus_changed)
 	if demo_content:
 		_apply_demo_content()
+
+
+## 任何控件拿到键盘焦点 ⇒ 立刻交还（本 HUD 是纯鼠标界面，不做 Tab 导航）。
+##
+## ⚠️ 必须放行输入框：`LineEdit` / `TextEdit` 没有焦点就打不进字
+##    （联机大厅的地址栏、棋盘房间号都在别的场景，但白名单照留 —— 拦错了更难查）。
+## ⚠️ `call_deferred`：在 `gui_focus_changed` 回调里直接 `release_focus()` 会重入本信号。
+func _on_gui_focus_changed(ctrl: Control) -> void:
+	if ctrl == null:
+		return
+	if ctrl.focus_mode == Control.FOCUS_NONE:
+		return
+	if ctrl is LineEdit or ctrl is TextEdit:
+		return
+	# SpinBox 自己的输入框是内部 LineEdit，父节点是 Range —— 一并放过
+	if ctrl.get_parent() is Range:
+		return
+	ctrl.call_deferred("release_focus")
 
 
 func _build_layout() -> void:
@@ -1610,11 +1647,32 @@ func set_equipment(items: Array) -> void:
 func set_stage(index: int, label: String, total_time: float) -> void:
 	if command_bar and command_bar.has_method("set_stage"):
 		command_bar.set_stage(index, label, total_time)
+	# 新阶段一开就把金线摆到正确长度（满条 / 不读秒），
+	# 不等下一帧 tick —— 否则开镜那一帧会看到上一回合的残留长度。
+	_push_stage_clock()
 
 
 func tick_stage(delta: float) -> void:
 	if command_bar and command_bar.has_method("tick"):
 		command_bar.tick(delta)
+	_push_stage_clock()
+
+
+## 把顶条的倒计时读数推给备战席金线（读条）。
+##
+## ⚠️ 这是**单向投影**：本函数只读 `command_bar.time_left/time_total`，
+##    不存时间、不递减 —— 那份计时器的唯一真相源在顶条（与
+##    `stage_seconds_left()` 同一条规矩）。在这里减一次就等于两个时钟。
+## ⚠️ 只有准备阶段读秒，理由见 `_phase` 的注释。
+func _push_stage_clock() -> void:
+	if bench_rail == null or not is_instance_valid(bench_rail):
+		return
+	if not bench_rail.has_method("set_stage_time"):
+		return
+	if _phase != 0 or command_bar == null:
+		bench_rail.set_stage_time(0.0, 0.0)
+		return
+	bench_rail.set_stage_time(command_bar.time_left, command_bar.time_total)
 
 
 ## 当前阶段剩余秒数（向上取整）—— 倒计时滴答音要用。
@@ -1646,8 +1704,12 @@ func set_beacon(value: int, max_value: int = -1) -> void:
 
 ## 顶条上的阶段：0 准备 / 1 战斗 / 2 结算
 func set_phase(p: int) -> void:
+	_phase = clampi(p, 0, 2)
 	if command_bar and command_bar.has_method("set_phase"):
 		command_bar.set_phase(p)
+	# 切阶段立刻同步读条状态：别等下一次 tick_stage ——
+	# 战斗开始时若还留着准备阶段的半截金线，会读成「准备还没结束」。
+	_push_stage_clock()
 
 
 ## 开战按钮的文案 + 可用性（随阶段变：开战 / 交战中 / 下一节点 / 再来一局）
