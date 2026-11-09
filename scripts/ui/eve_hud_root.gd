@@ -323,38 +323,16 @@ func _ready() -> void:
 	#   桌面端 `_on_resized()` 会立刻返回 —— 它的布局是设计稿的绝对坐标，
 	#   跟视口无关（这也是「Windows 端逐像素不变」的一部分）。
 	resized.connect(_on_resized)
-	# ★★ 2026-11-08（玩家反馈「空格会重复上一次点过的按钮」）：
-	#    Godot 的 BaseButton 默认 `focus_mode = FOCUS_ALL` ⇒ 鼠标点过哪个按钮，
-	#    哪个按钮就**拿走了键盘焦点**；此后按空格 = 又按了它一次。
-	#    实测症状：点完商店「↻ 刷新」再按空格想暂停 —— 结果是又刷了一次（还扣钱）；
-	#    点过「▲ 等级加速」再按空格 —— 又升了一级。空格在这里的语义只能是
-	#    「暂停/继续」（顶条写的就是这个），不该被任何按钮截走。
-	#
-	# ⚠️ 为什么挂 Viewport 的 `gui_focus_changed` 而不是逐个设 `focus_mode`：
-	#    商店卡 / 事件四选一 / 战利品 / 设置行里的按钮全是**运行时动态重建**的，
-	#    逐个设置必然漏（漏一个就复现一次这个 bug）。这里在「拿到焦点」的瞬间
-	#    统一交还，覆盖全树且与后面的动态创建立刻自洽。
-	get_viewport().gui_focus_changed.connect(_on_gui_focus_changed)
+	# ⛔ 删除记录（2026-11-08 晚，当天回滚）：
+	#    这里曾挂 `get_viewport().gui_focus_changed → release_focus()`，
+	#    想解决「点过刷新后按空格又刷一次」。**它把全游戏按钮点死了** ——
+	#    焦点变更就发生在鼠标按下那一刻，释放焦点会连带清掉 `BaseButton.press_attempt`，
+	#    抬手时 `pressed` 不触发 ⇒ 现象是「只能买船（卡片走 gui_input），
+	#    刷新 / 加速 / 继续·下一节点 全都点不动」。
+	#    现在改成从 `ui_accept` 动作里摘掉空格：`scripts/ui/eve_input_guard.gd`。
+	#    一次性探针实测：正常点击 pressed=true，按下后 release_focus / focus_mode=NONE 都是 false。
 	if demo_content:
 		_apply_demo_content()
-
-
-## 任何控件拿到键盘焦点 ⇒ 立刻交还（本 HUD 是纯鼠标界面，不做 Tab 导航）。
-##
-## ⚠️ 必须放行输入框：`LineEdit` / `TextEdit` 没有焦点就打不进字
-##    （联机大厅的地址栏、棋盘房间号都在别的场景，但白名单照留 —— 拦错了更难查）。
-## ⚠️ `call_deferred`：在 `gui_focus_changed` 回调里直接 `release_focus()` 会重入本信号。
-func _on_gui_focus_changed(ctrl: Control) -> void:
-	if ctrl == null:
-		return
-	if ctrl.focus_mode == Control.FOCUS_NONE:
-		return
-	if ctrl is LineEdit or ctrl is TextEdit:
-		return
-	# SpinBox 自己的输入框是内部 LineEdit，父节点是 Range —— 一并放过
-	if ctrl.get_parent() is Range:
-		return
-	ctrl.call_deferred("release_focus")
 
 
 func _build_layout() -> void:

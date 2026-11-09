@@ -6,6 +6,10 @@ extends Control
 ## ⚠️ 子类（`extends eve_window.gd` 的那 9 个）靠**继承**拿到这个常量，
 ##    它们自己再写一个会撞名（基类已有同名成员 ⇒ 子类编译失败，本工程踩过）。
 const FONT := preload("res://scripts/ui/eve_font.gd")
+## ★ 空格语义守卫（2026-11-08，见该文件顶部说明）。
+##   ⛔ 用 preload 路径而不是 `class_name` —— 新 class_name 要引擎重扫才注册得上，
+##      热更 pck 一律改不了注册表（b39 黑屏的教训）。
+const INPUT_GUARD := preload("res://scripts/ui/eve_input_guard.gd")
 ## EVE 自走棋 —— 主界面（启动后的第一个页面）
 ##
 ## ══════════════════════════════════════════════════════════════════
@@ -365,6 +369,13 @@ var _ack_btn: Button = null
 
 
 func _ready() -> void:
+	# ★★ 2026-11-08（玩家反馈「空格会重复上一次点过的按钮」）：
+	#    在这里把「空格」从 `ui_accept` 里摘掉 —— 一次性、全局、与具体场景无关。
+	#    主菜单是启动后第一个页面，放在这里就能保证后续所有场景都吃到。
+	#    ⛔ 别改成"抢焦点"：`gui_focus_changed` 在鼠标按下那一刻发，
+	#       释放焦点会把按钮的 `press_attempt` 一起清掉 ⇒ 全游戏按钮点不动。
+	#       详细实测与结论见 `scripts/ui/eve_input_guard.gd` 顶部。
+	INPUT_GUARD.detach_space_from_accept()
 	# ★ 2026-10-10 i18n：**必须早于任何 UI 构建** —— 文案是建的时候取词的。
 	T.apply_saved()
 	# ★★ 第一件事：把**旧项目名**下的存档搬过来（2026-10-07 改显示名的一次性收尾）。
