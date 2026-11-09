@@ -16,6 +16,8 @@ project.godot.bak*
 _验收/
 # 真机抓图 / 出图产物（tools/android/device_shot.sh 默认写这里；不入库）
 outputs/
+# 探针 / 验收截图（2026-11-09 星舰万象棋验收留图；不入库）
+.screenshots/
 _logs_backup_*/
 QQ图片*
 

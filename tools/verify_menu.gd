@@ -142,13 +142,25 @@ func _step_nested_modes() -> void:
 	var ids := PackedStringArray()
 	for m in _menu._modes:
 		ids.append(String((m as Dictionary)["id"]))
-	_ok(ids == PackedStringArray(["autochess", "campaign", "endless",
-			"versus", "cardroom", "credits"]),
+	# ★ 2026-11：星舰万象棋接入为**第一层第一项**，自走棋顺势下移一格。
+	_ok(ids == PackedStringArray(["starchess", "autochess", "campaign",
+			"endless", "versus", "cardroom", "credits"]),
 			"★ 可见行顺序（实际 %s）" % str(ids))
-	# 疆域删除后：第一项必须是自走棋（其余行因此整体上移一格）
+	# 疆域删除后：第一项原本是自走棋；星舰万象棋接入后它退到第 2 位。
 	_ok(_mode_index("territory") < 0, "★ 疆域选项已删除")
-	_ok(String((_menu._modes[0] as Dictionary)["id"]) == "autochess",
-			"★ 自走棋升为第一项（其他按钮顺势上移）")
+	_ok(String((_menu._modes[0] as Dictionary)["id"]) == "starchess",
+			"★ 星舰万象棋升为第一项")
+	_ok(_mode_index("autochess") == 1,
+			"★ 自走棋退到第 2 位（其他按钮顺势下移）")
+	# 星舰万象棋的「开始」必须真的切到它自己的场景（红线 9：不许点了没反应）
+	# 注意：直接改 _mode_idx 再还原，不要调 _on_mode_pressed ——
+	#   自走棋默认是展开的，点它一次会折叠，后面所有展开/收起断言都会跟着错。
+	var sc_prev_idx: int = _menu._mode_idx
+	_menu._mode_idx = _mode_index("starchess")
+	_ok(_menu.target_scene_for_start() == "res://scenes/starchess/sc_lobby.tscn",
+			"★ 星舰万象棋 ⇒ 进它自己的大厅（实际「%s」）"
+					% _menu.target_scene_for_start())
+	_menu._mode_idx = sc_prev_idx
 	var ai := _mode_index("autochess")
 	_ok(ai >= 0 and bool((_menu._modes[ai] as Dictionary).get("parent", false)),
 			"「自走棋」是父项")
@@ -165,7 +177,9 @@ func _step_nested_modes() -> void:
 	# 点父项（已展开）⇒ 收起；子项行消失，选中回落到父项，右侧回落任务关卡内容
 	_menu._on_mode_pressed(_mode_index("autochess"))
 	_ok(not bool(_menu._expanded), "点父项（已展开）⇒ 收起")
-	_ok(_menu._modes.size() == 3, "收起后可见行 = 3（实际 %d）" % _menu._modes.size())
+	# 收起后 = 星舰万象棋 / 自走棋 / 娱乐总汇 / 版权声明 = 4 行
+	# （接入星舰万象棋前是 3 行；它占第一层，收起自走棋子项不影响它）
+	_ok(_menu._modes.size() == 4, "收起后可见行 = 4（实际 %d）" % _menu._modes.size())
 	_ok(String((_menu._modes[_menu._mode_idx] as Dictionary)["id"]) == "autochess",
 			"收起后选中回落到父项")
 	_ok(_menu._strip_panels.size() == TIERS.DIFFICULTIES.size(),

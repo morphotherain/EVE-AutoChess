@@ -63,6 +63,11 @@ const CARD_ROOM_MODE_ID := "cardroom"
 const DOUDIZHU_SCENE := "res://scenes/doudizhu.tscn"
 ## 联机对战大厅（真联机：建房 / 加入）
 const VERSUS_LOBBY_SCENE := "res://scenes/versus_lobby.tscn"
+## ★ 星舰万象棋（2026-11 接入）：主菜单**第一层第一项**，独立玩法。
+##   它借用本工程的舰船立绘 / 船表 / 按钮皮肤 / 字体，自身只带玩法逻辑。
+##   ⚠️ 场景落在 res://scenes/starchess/，逻辑在 scripts/starchess/。
+const STAR_CHESS_MODE_ID := "starchess"
+const STAR_CHESS_SCENE := "res://scenes/starchess/sc_lobby.tscn"
 ## 开场剧情场景（**只在第一次玩时**经过它，见 `_on_start_pressed`）
 const INTRO_SCENE := "res://scenes/intro_scene.tscn"
 ## 「第一次玩」的判据：第 1 模式（任务关卡）的第 1 难度（守卫边境）
@@ -636,6 +641,23 @@ func _build_top_table() -> Array:
 	# ⛔ 别在这里再建一个 versus 行 —— EXTRA_MODES 已经有一个同 id 的，
 	#    两份会渲染出两行「联机对战」（2026-10-27 踩过）。
 	var out: Array = []
+	# ★ 星舰万象棋：**必须 append 在 EXTRA_MODES 循环之前** ——
+	#   `_modes` 的顺序直接决定左列 VBox 的渲染顺序，插在前面才在最上面。
+	out.append({
+		"id": STAR_CHESS_MODE_ID, "name": "星舰万象棋",
+		"meta": "6 人局 · 指挥官 · 共享卡池",
+		"locked": false,
+		"cards": [
+			{
+				"name": "标准 6 人局", "code": "SC_STD", "open": true,
+				"desc": "6 名指挥官共用 52 艘 EVE 舰船的卡池。"
+						+ "60 秒选人，3 费固定，淘汰制。",
+				"stats": [["人数", "6 · 1 真人 + 5 AI", ""],
+						["卡池", "52 艘 · 四帝国", ""],
+						["费用", "固定 3", "gold"]],
+			},
+		],
+	})
 	for m in EXTRA_MODES:
 		var row: Dictionary = (m as Dictionary).duplicate(true)
 		if String(row.get("id", "")) == AUTOCHESS_MODE_ID:
@@ -1935,6 +1957,10 @@ func target_scene_for_start() -> String:
 	if not bool(cards[sel]["open"]):
 		return ""
 	var mode_id := _content_id()
+	# ★ 星舰万象棋：独立玩法，直接进它自己的大厅（选指挥官）。
+	#   ⚠️ 必须放在 tier_id 分支之前 —— 它的卡片没有难度 id。
+	if mode_id == STAR_CHESS_MODE_ID:
+		return STAR_CHESS_SCENE
 	# 联机对战：两张真人卡片都先进大厅（建房/加入在那里握手）。
 	# ⚠️ 必须在 tier_id 分支之前判：联机卡片没有 `id` 字段。
 	if mode_id == VERSUS_MODE_ID:
