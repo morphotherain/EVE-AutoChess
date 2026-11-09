@@ -80,12 +80,12 @@ func _build() -> void:
 	_round_lb.position = Vector2(20, 12)
 	add_child(_round_lb)
 
-	var ban := Label.new()
-	ban.text = "禁用：河洛"
-	ban.add_theme_color_override("font_color", C_DIM)
-	FONT.fs(ban, 12)
-	ban.position = Vector2(1660, 14)
-	add_child(ban)
+	# ⛔ 2026-11-09（用户反馈截图）：这里原来有个硬编码的 `Label`，
+	#    文案写死「禁用：河洛」，右上角 (1660, 14)。
+	#    它背后**没有任何禁用逻辑** —— 只是界面占位，纯装饰却让人以为
+	#    这一局真的禁了一个派系（还会去怀疑商店是不是被过滤了）。
+	#    已整块删除；将来若真要做「禁派系」机制，必须同时有数据源
+	#    （`sc_context` 里的 ban 字段）+ 商店过滤 + 本标签三处，不能只留标签。
 
 	# ---- 顶部商店（4 张大卡）
 	var cards_w := float(SHOP_SLOTS) * CARD_W + float(SHOP_SLOTS - 1) * CARD_GAP
