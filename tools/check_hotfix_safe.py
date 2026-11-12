@@ -142,6 +142,16 @@ def main():
         print("\n✗ 本次新增了 autoload：%s" % ", ".join(added))
         print("  ⛔ 它们只能靠**发完整包**生效。热更包改不了 autoload 注册表。")
         print("     要么把功能挪到「被场景加载的脚本」里（如主菜单），要么别发 hotfix。")
+        print("")
+        # [WHY] 2026-11-12：PR #5 引入 EveUiAudio 时踩过一次。报错只说「别发 hotfix」，
+        #       没说「那正事该怎么做」，容易被理解成「把基线刷一下就没事了」——
+        #       那正好是 b39 黑屏的下一步。这里把正确顺序钉死在输出里。
+        print("  ⇒ 正确顺序（缺一步都会出事）：")
+        print("     ① tools/export_release.sh          导出 APK + EXE（完整包）")
+        print("     ② 把完整包发出去，让玩家装上")
+        print("     ③ python tools/check_hotfix_safe.py --update-baseline")
+        print("        ⛔ ③ 必须在 ② 之后：基线是「玩家手上那个包」的列表，")
+        print("           提前刷 = 闸门失效 = 老客户端又没这个 autoload。")
         return 1
 
     # ── 模拟最老的客户端：把所有「基线之外的」都当作不存在 ──────────────

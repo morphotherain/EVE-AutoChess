@@ -133,6 +133,23 @@ fi
 [ -f "${EXE}" ] && echo "✓ ${EXE}（$(du -m "${EXE}" | cut -f1) MB）" || { echo "✗ EXE 没生成"; fail=1; }
 
 echo ""
-[ "${fail}" -eq 0 ] && echo "导出完成 ✅（preset 里的签名行已还原，仓库保持干净）" \
-                   || echo "有失败项 ❌"
+if [ "${fail}" -eq 0 ]; then
+  echo "导出完成 ✅（preset 里的签名行已还原，仓库保持干净）"
+  echo ""
+  echo "  完整包已落在：${OUT_DIR}"
+  echo "    ${NAMESPACE}.apk"
+  echo "    ${NAMESPACE}.exe"
+  echo ""
+  # [WHY] 2026-11-12：完整包和热更包是两条路，交叉点只有「autoload 列表」。
+  #       发完完整包不刷基线 ⇒ 下次热更会被闸门拦住（多一步人工判断）；
+  #       反过来，没发完整包就刷基线 ⇒ 闸门失效 ⇒ 老客户端黑屏（b39）。
+  #       所以把「发完要刷基线」挂在导出成功这条路径上，而不是靠记忆。
+  echo "  下一步："
+  echo "    1) 把这两个包发出去，确认玩家能装上、能进主菜单"
+  echo "    2) python tools/check_hotfix_safe.py --update-baseline"
+  echo "       ⛔ 顺序不能反：基线记的是「玩家手上那个包」的 autoload 列表。"
+  echo "    3) 之后才轮得到 tools/publish_hotfix.sh 发热更"
+else
+  echo "有失败项 ❌"
+fi
 exit "${fail}"
