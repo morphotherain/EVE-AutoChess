@@ -34,12 +34,18 @@ var _armor_bar: MeshInstance3D = null
 var _hull_bar: MeshInstance3D = null
 var _name_label: Label3D = null
 var _stance_label: Label3D = null
+const HEALTH_BAR_SHADER := preload("res://scripts/visual/fx_health_bar.gdshader")
+const ELECTRONIC_STATUS_SHADER := preload("res://scripts/visual/fx_electronic_status.gdshader")
+var _electronic_badges: Array[MeshInstance3D] = []
+var _electronic_active := false
+var feedback_managed := false
+var _bar_feedback: Dictionary = {}
 ## 敌我识别（2026-10-27）
 ##   方案 D：血条外框染阵营色 + 名字前 ▲/◆ 徽标
 ##   方案 B：名牌底板（半透明深色托住名字）+ 左侧阵营色条
 ## 两个方案都实装了，用 team_id_mode 切换对比。
 var _team_frame: MeshInstance3D = null
-var _team_frame_mat: StandardMaterial3D = null
+var _team_frame_mat: ShaderMaterial = null
 var _name_plate: MeshInstance3D = null
 var _name_stripe: MeshInstance3D = null
 ## 敌我识别模式：0 = 关 · 1 = 方案D · 2 = 方案B
@@ -260,12 +266,16 @@ func setup(p_ship: EveShip) -> void:
 	# 船体与信息层的缩放。两种态的差异见 BOARD_EXAGGERATION 的说明，
 	# 实现在 _apply_scale() 里（切换布阵态时也要走同一条路径，别抄第二份）。
 	_apply_scale()
+	_prepare_fx_surfaces()
+	_prepare_authored_fx_sites()
 
 	_last_pos = ship.body.position
 	position = ship.body.position / METERS_PER_UNIT
 	_sync_label_transform()
 
-	# 护盾壳：开发期可见，用来确认贴花落在壳面的哪里
+	# Restore the original prebuilt shield patch pool. Its meshes exist from
+	# setup, remain transparent between hits, and never enter the hull BVH.
+	_fx_hull_bounds()
 	_ensure_shield_fx()
 
 	# ★ 2026-10-27：先跑一次血量/标签判定 —— 否则布阵态的满血船会带着
@@ -1185,27 +1195,20 @@ func _build_team_id() -> void:
 	# ① 血条外框：一个略大的空心矩形，染阵营色
 	#    ⚠️ 用 QuadMesh 画「边框」而不是四个细长条：一个节点、一次绘制，
 	#       且能跟着 label_root 一起 billboard / 缩放。
-	var fm := StandardMaterial3D.new()
-	fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	fm.albedo_color = Color(col.r, col.g, col.b, 0.95)
-	fm.emission_enabled = true
-	fm.emission = col
-	# ⚠️ 自发光压到 0.45：原来 1.1 在暗背景下会「发亮」，
-	#    用户反馈就是这种荧光感。现在只保留一点点辉光，主要靠固有色。
-	fm.emission_energy_multiplier = 0.45
-	fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	fm.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	fm.billboard_keep_scale = true
-	fm.disable_fog = true
-	fm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var fm := ShaderMaterial.new()
+	fm.shader=HEALTH_BAR_SHADER
+	fm.set_shader_parameter("tint",col)
+	fm.set_shader_parameter("frame_only",true)
+	fm.set_shader_parameter("opacity",0.85)
+	fm.render_priority=-1
 	_team_frame_mat = fm
 	var fq := QuadMesh.new()
-	fq.size = Vector2(BAR_WIDTH + 0.10, 0.075 + 0.055)
+	fq.size = Vector2(BAR_WIDTH + 0.12, 0.51)
 	_team_frame = MeshInstance3D.new()
 	_team_frame.name = "TeamFrame"
 	_team_frame.mesh = fq
 	_team_frame.material_override = fm
-	_team_frame.position = Vector3(0, LABEL_HEIGHT + 0.08, -0.001)
+	_team_frame.position = Vector3(0, LABEL_HEIGHT + 0.05, -0.001)
 	label_root.add_child(_team_frame)
 
 
@@ -1333,7 +1336,7 @@ var _flash_count: int = 0
 
 ## 受击闪光入口。`layer` = &"shield" / &"armor" / &"hull"（传空按结构色）。
 ##
-## ⚠️ 这个函数会被 `_on_shot_fired` **高频调用**（一次 `sim.step` 里可能几十次），
+## 由真实结算事件 receive_impact 高频调用（一次 sim.step 里可能几十次），
 ##    所以首次之后只做「重置计时 + 写一次颜色」，**绝不重复遍历网格**。
 func flash_hit(layer: StringName = &"hull") -> void:
 	if hull_root == null:
@@ -1352,13 +1355,15 @@ func flash_hit(layer: StringName = &"hull") -> void:
 	_flash_t = 0.0
 	_flash_life = FLASH_LIFE
 	_flash_count += 1
-	set_process(true)
+	if not feedback_managed:
+		set_process(true)
 
 
 ## 建一次叠加层。**所有船体网格共用同一个 overlay 材质实例** ⇒ 改 alpha 只写一次。
 func _build_flash_layer() -> void:
 	_flash_meshes.clear()
-	_collect_hull_meshes(hull_root, _flash_meshes)
+	for entry in _fx_surfaces:
+		_flash_meshes.append(entry.node)
 	if _flash_meshes.is_empty():
 		return
 	_flash_mat = StandardMaterial3D.new()
@@ -1382,10 +1387,26 @@ func _collect_hull_meshes(n: Node, out: Array[MeshInstance3D]) -> void:
 		_collect_hull_meshes(c, out)
 
 
-## 闪光计时。平时 `set_process(false)`，只有闪起来才进这里。
+## 实战由 arena 的战斗时钟推进；独立模型也可自行推进受击和血条。
 func _process(delta: float) -> void:
+	if feedback_managed:
+		return
+	advance_hit_feedback(delta)
+
+
+func advance_hit_feedback(delta: float) -> void:
+	if _shield_fx != null and feedback_managed:
+		_shield_fx.advance(delta)
+	for state in _bar_feedback.values():
+		if state.hit_age>=1.0 and state.break_age>=1.0 and is_equal_approx(state.trail,state.fill):
+			continue
+		state.hit_age = minf(10.0,state.hit_age+delta)
+		state.break_age = minf(10.0,state.break_age+delta)
+		state.hold = maxf(0.0,state.hold-delta)
+		if state.hold<=0.0:
+			state.trail = move_toward(state.trail,state.fill,delta*maxf(0.4,(state.trail-state.fill)*4.5))
+		_update_bar_material(state)
 	if _flash_life <= 0.0:
-		set_process(false)
 		return
 	_flash_t += delta
 	var k := _flash_t / maxf(0.001, _flash_life)
@@ -1400,7 +1421,6 @@ func _process(delta: float) -> void:
 		#    探针读数：第 1 张「已挂 overlay 1」，第 2/3 张「已挂 overlay 0」。
 		#    实测船体网格只有 1 个（glb 是单 MeshInstance3D 多 surface），
 		#    常驻一个 alpha=0 的 overlay 成本可以忽略 ⇒ 保留挂载最省心。
-		set_process(false)
 		return
 	# 平方衰减：亮得快、灭得干脆（与 EveBattleFx 的淡出曲线同一口径）
 	if _flash_mat != null:
@@ -1423,9 +1443,9 @@ func flash_count() -> int:
 ##    因为 label_root 会整体乘 VISUAL_EXAGGERATION，所以这些值要按小尺度给。
 func _build_bars() -> void:
 	var top := LABEL_HEIGHT
-	_shield_bar = _make_bar(Vector3(0, top + 0.20, 0), Color(0.35, 0.70, 0.90))
-	_armor_bar = _make_bar(Vector3(0, top + 0.08, 0), Color(0.85, 0.68, 0.28))
-	_hull_bar = _make_bar(Vector3(0, top - 0.04, 0), Color(0.82, 0.32, 0.28))
+	_shield_bar = _make_bar(Vector3(0, top + 0.21, 0), Color(0.35, 0.70, 0.90))
+	_armor_bar = _make_bar(Vector3(0, top + 0.05, 0), Color(0.85, 0.68, 0.28))
+	_hull_bar = _make_bar(Vector3(0, top - 0.11, 0), Color(0.82, 0.32, 0.28))
 	for bar in [_shield_bar, _armor_bar, _hull_bar]:
 		label_root.add_child(bar)
 
@@ -1433,20 +1453,50 @@ func _build_bars() -> void:
 func _make_bar(pos: Vector3, color: Color) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var quad := QuadMesh.new()
-	quad.size = Vector2(BAR_WIDTH, 0.075)
+	# The quad includes transparent breathing room for the local glow.
+	quad.size = Vector2(BAR_WIDTH+0.08, 0.24)
 	mi.mesh = quad
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = color
-	mat.emission_enabled = true
-	mat.emission = color
-	mat.emission_energy_multiplier = 0.7
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	mat.billboard_keep_scale = true
-	mat.disable_fog = true
+	var mat := ShaderMaterial.new()
+	mat.shader = HEALTH_BAR_SHADER
+	mat.set_shader_parameter("tint",color)
 	mi.material_override = mat
 	mi.position = pos
+	_bar_feedback[mi] = {"node":mi,"material":mat,"fill":1.0,"trail":1.0,
+		"hold":0.0,"hit_age":10.0,"break_age":10.0,"strength":1.0,"allow":true,"last_values":Vector4(-1,-1,-1,-1)}
 	return mi
+
+
+## Auxiliary, text-free state icons. Persistent 3D fields remain the main cue.
+func set_electronic_status(suppression: float, jam_remaining: float) -> void:
+	var active := suppression > 0.0 or jam_remaining > 0.0
+	if active and _electronic_badges.is_empty():
+		for index in range(2):
+			var icon := MeshInstance3D.new()
+			icon.name = "SuppressionStatus" if index == 0 else "ECMStatus"
+			var quad := QuadMesh.new()
+			quad.size = Vector2.ONE * 0.32
+			icon.mesh = quad
+			icon.position = Vector3(0.0, LABEL_HEIGHT + 0.18, 0.0)
+			icon.custom_aabb = AABB(Vector3(-3.0, -1.0, -1.0), Vector3(6.0, 2.0, 2.0))
+			var mat := ShaderMaterial.new()
+			mat.shader = ELECTRONIC_STATUS_SHADER
+			mat.render_priority = 3
+			mat.set_shader_parameter("kind", float(index))
+			mat.set_shader_parameter("offset", Vector2(BAR_WIDTH * 0.5 + 0.23 + float(index) * 0.38, 0.0))
+			mat.set_shader_parameter("screen_min_px", 14.0)
+			mat.set_shader_parameter("screen_max_scale", 4.0)
+			mat.set_shader_parameter("opacity", _label_dim)
+			icon.material_override = mat
+			label_root.add_child(icon)
+			_electronic_badges.append(icon)
+	for index in range(_electronic_badges.size()):
+		var remaining := suppression if index == 0 else jam_remaining
+		_electronic_badges[index].visible = remaining > 0.0 and ship.alive
+		_electronic_badges[index].material_override.set_shader_parameter("remaining",
+			1.0 if index == 0 else clampf(jam_remaining / EveShip.JAM_DURATION, 0.0, 1.0))
+	if _electronic_active != active:
+		_electronic_active = active
+		_update_bars()
 
 
 # ------------------------------------------------------------------ 标签
@@ -1707,7 +1757,7 @@ func _update_bars() -> void:
 	var hurt: bool = float(ship.hp[&"shield"]) < s_max - 0.5 \
 			or float(ship.hp[&"armor"]) < a_max - 0.5 \
 			or float(ship.hp[&"hull"]) < h_max - 0.5
-	var show_bars: bool = key or hurt
+	var show_bars: bool = key or hurt or _electronic_active
 
 	_set_bar(_shield_bar, ship.hp[&"shield"] / s_max, show_bars)
 	_set_bar(_armor_bar, ship.hp[&"armor"] / a_max, show_bars)
@@ -1725,13 +1775,35 @@ func _set_bar(bar: MeshInstance3D, fraction: float, allow: bool = true) -> void:
 	if bar == null:
 		return
 	var f := clampf(fraction, 0.0, 1.0)
-	bar.visible = allow and f > 0.001
-	if not bar.visible:
+	var state:Dictionary = _bar_feedback[bar]
+	if f < state.fill-0.00001:
+		if is_equal_approx(state.trail,state.fill):
+			state.hold=0.12
+		state.trail=maxf(state.trail,state.fill)
+		state.strength=clampf((state.fill-f)*5.0,0.85,1.8)
+		state.hit_age=0.0
+	elif f>state.fill:
+		state.trail=f
+	state.fill=f
+	state.allow=allow
+	_update_bar_material(state)
+
+
+func _update_bar_material(state: Dictionary) -> void:
+	state.node.visible = state.allow and (state.fill>0.001 or state.trail>0.001)
+	var values:=Vector4(state.fill,state.trail,
+		exp(-state.hit_age*12.0) if state.hit_age<1.0 else 0.0,
+		exp(-state.break_age*9.0) if state.break_age<1.0 else 0.0)
+	if values==state.last_values:
 		return
-	# 用缩放模拟血条长度（锚点靠左）
-	# 血条基准宽度见 BAR_WIDTH（_make_bar 与这里必须一致）
-	bar.scale.x = f
-	bar.position.x = -(BAR_WIDTH * (1.0 - f)) * 0.5
+	var parameters:=[&"fill",&"trail",&"hit_pulse",&"break_pulse"]
+	for i in range(4):
+		if values[i]!=state.last_values[i]:
+			state.material.set_shader_parameter(parameters[i],values[i])
+	state.last_values=values
+	state.material.set_shader_parameter("hit_age",state.hit_age)
+	state.material.set_shader_parameter("break_age",state.break_age)
+	state.material.set_shader_parameter("hit_strength",state.strength)
 
 
 ## ══════════════════════════════════════════════════════════════════
@@ -1810,14 +1882,15 @@ func label_block_world() -> Rect2:
 	var chars := 0
 	if _name_label != null:
 		chars = _name_label.text.length()
-	var half_w := maxf(BAR_WIDTH, float(chars) * 0.32) * 0.5 * s
+	var half_w := maxf(BAR_WIDTH+0.14, float(chars) * 0.32) * 0.5 * s
+	if _electronic_active: half_w = maxf(half_w, (BAR_WIDTH * 0.5 + 0.80) * s)
 	# 名字常驻：font_size 32 × pixel_size 0.010 = 0.32 世界高，中心 y=1.65
 	var bottom := 1.49
 	var top := 1.81
 	if _stance_label != null and _stance_label.visible:
 		bottom = minf(bottom, 1.31)         # 姿态：24×0.009=0.216，中心 1.42
 	if _hull_bar != null and _hull_bar.visible:
-		bottom = minf(bottom, 0.87)         # 最底一条血条（hull）
+		bottom = minf(bottom, 0.72)         # 新槽底、三层间隔与受击辉光留白
 	# 指挥环比名字更高（旗舰 y=2.35 r=0.22 ⇒ 上沿 2.57）
 	if (_flag_badge != null and _flag_badge.visible) \
 			or (_focus_badge != null and _focus_badge.visible):
@@ -1872,11 +1945,13 @@ func _apply_label_dim() -> void:
 	for bar in [_shield_bar, _armor_bar, _hull_bar]:
 		if bar == null:
 			continue
-		var mat := bar.material_override as StandardMaterial3D
+		var mat := bar.material_override as ShaderMaterial
 		if mat != null:
-			mat.albedo_color.a = _label_dim
+			mat.set_shader_parameter("opacity",_label_dim)
 	if _team_frame_mat != null:
-		_team_frame_mat.albedo_color.a = 0.95 * _label_dim
+		_team_frame_mat.set_shader_parameter("opacity",0.85*_label_dim)
+	for icon in _electronic_badges:
+		icon.material_override.set_shader_parameter("opacity", _label_dim)
 
 
 func _build_command_badges() -> void:
@@ -1943,6 +2018,335 @@ func refresh_stance() -> void:
 
 const SHIELD_IMPACT_SCRIPT := preload("res://scripts/visual/eve_shield_impact.gd")
 
+var _combat_bounds := AABB()
+var _combat_bounds_ready := false
+
+
+func _fx_hull_bounds() -> AABB:
+	if not _combat_bounds_ready:
+		_combat_bounds = _hull_local_bounds()
+		_combat_bounds_ready = true
+	return _combat_bounds
+
+
+# Native BVHs and sparse fallback surface samples are shared by mesh resource.
+# Queries use each live MeshInstance's current render transform, including all
+# model normalization, yaw/roll correction and board/battle scale.
+static var _fx_surface_cache: Dictionary = {}
+var _fx_surfaces: Array[Dictionary] = []
+static var _authored_fx_data: Dictionary = {}
+var _fx_mount_sites: Array[Dictionary] = []
+var _fx_damage_sites: Array[Vector3] = []
+var _fx_active_mount := -1
+
+
+func _prepare_authored_fx_sites() -> void:
+	if _authored_fx_data.is_empty():
+		var text := FileAccess.get_file_as_string("res://assets/vfx/combat/hull_locators.json")
+		_authored_fx_data = JSON.parse_string(text).get("ships", {})
+	var data: Dictionary = _authored_fx_data.get(String(ship.ship_key), {})
+	if data.is_empty() or _fx_surfaces.is_empty():
+		return
+	# SOF uses native hull axes. GLB vertex data is (x,-y,-z), before
+	# its live MeshInstance transform (which includes the baked root rotation).
+	# These are hull turret BASES, not the muzzle bones of a fitted turret.
+	var mi: MeshInstance3D = _fx_surfaces[0].node
+	for item in data.turrets:
+		# A name-only locator defaults to identity in the native constructor and
+		# needs an animation bone by name. This static GLB cannot supply that pose.
+		if not item.authored_transform and not item.has("bind_bone"):
+			continue
+		var m: Array = item.transform
+		var point := Vector3(m[12], -m[13], -m[14])
+		var normal := Vector3(m[4], -m[5], -m[6]).normalized()
+		var site := _project_authored_site(mi, point, normal)
+		if not site.is_empty():
+			_fx_mount_sites.append(site)
+	for item in data.damage:
+		var p: Array = item.bind_position
+		var n: Array = item.bind_normal
+		var native_normal := Vector3(n[0],n[1],n[2])
+		var site := _project_authored_site(mi, Vector3(p[0], -p[1], -p[2]),
+			Vector3(native_normal.x, -native_normal.y, -native_normal.z))
+		if not site.is_empty():
+			_fx_damage_sites.append(site.point)
+
+
+func _project_authored_site(mi: MeshInstance3D, point: Vector3, normal: Vector3) -> Dictionary:
+	var span := mi.mesh.get_aabb().size.length()
+	var triangles: TriangleMesh = _fx_surface_cache[mi.mesh].triangles
+	# Echoes GLBs can differ from the current PC hull/bind pose. Use the authored
+	# site as a local attachment hint and intersect the actual displayed mesh.
+	var hit := triangles.intersect_segment(point + normal * span * 0.09, point - normal * span * 0.09)
+	if hit.is_empty() or point.distance_to(hit.position) > span * 0.08:
+		return {}
+	return {"point": hull_root.to_local(mi.to_global(hit.position)),
+		"normal": (hull_root.global_basis.inverse() * mi.global_basis * normal).normalized()}
+
+
+func fx_destruction_sites() -> Array[Vector3]:
+	var points: Array[Vector3] = []
+	for point in _fx_damage_sites:
+		points.append(hull_root.to_global(point))
+	if points.is_empty():
+		for entry in _fx_surfaces:
+			for point in entry.data.samples:
+				points.append(entry.node.to_global(point))
+	return points
+
+
+func fx_hull_span() -> float:
+	return _fx_hull_bounds().size.length() * hull_root.global_basis.get_scale().x
+
+
+func fx_transverse_extent(direction: Vector3) -> float:
+	var center := fx_center_world()
+	var extent := 0.0
+	for i in range(8):
+		var point := hull_root.to_global(_fx_hull_bounds().get_endpoint(i))
+		extent = maxf(extent,absf((point-center).dot(direction)))
+	return extent
+
+func _prepare_fx_surfaces() -> void:
+	if not _fx_surfaces.is_empty() or hull_root == null:
+		return
+	for mi in _all_meshes(hull_root):
+		if mi.mesh == null:
+			continue
+		var mesh: Mesh = mi.mesh
+		if not _fx_surface_cache.has(mesh):
+			var triangles := mesh.generate_triangle_mesh()
+			if triangles == null:
+				continue
+			var faces := triangles.get_faces()
+			var samples := PackedVector3Array()
+			var face_count := faces.size() / 3
+			var stride := maxi(1, int(ceil(float(face_count) / 128.0)))
+			for face in range(0, face_count, stride):
+				var i := face * 3
+				if (faces[i + 1] - faces[i]).cross(faces[i + 2] - faces[i]).length_squared() > 1e-14:
+					samples.append((faces[i] + faces[i + 1] + faces[i + 2]) / 3.0)
+			_fx_surface_cache[mesh] = {"triangles": triangles, "samples": samples}
+		_fx_surfaces.append({"node": mi, "data": _fx_surface_cache[mesh]})
+
+
+func fx_center_world() -> Vector3:
+	return hull_root.to_global(_fx_hull_bounds().get_center()) if hull_root != null else global_position
+
+
+func _fx_ray_surface(from_world: Vector3, aim_world: Vector3) -> Dictionary:
+	var hit := {}
+	var nearest := INF
+	var direction := (aim_world - from_world).normalized()
+	var end := aim_world + direction * maxf(_fx_hull_bounds().size.length() * hull_root.global_basis.get_scale().length(), 0.1)
+	for entry in _fx_surfaces:
+		var mi: MeshInstance3D = entry.node
+		if not is_instance_valid(mi) or not mi.visible:
+			continue
+		var triangles: TriangleMesh = entry.data.triangles
+		var local_hit := triangles.intersect_segment(mi.to_local(from_world), mi.to_local(end))
+		if local_hit.is_empty():
+			continue
+		var point: Vector3 = mi.to_global(local_hit.position)
+		var distance := from_world.distance_squared_to(point)
+		if distance < nearest:
+			nearest = distance
+			hit = {"point": point}
+	return hit
+
+
+func _select_fx_mount(aim_world: Vector3, require_exposed: bool = true) -> int:
+	var chosen := -1
+	var best := -INF
+	var scores: Array[float] = []
+	for site in _fx_mount_sites:
+		var point: Vector3 = hull_root.to_global(site.point)
+		var facing: float = (hull_root.global_basis * site.normal).normalized().dot((aim_world - point).normalized())
+		var exposed := true
+		if require_exposed:
+			var hit := _fx_ray_surface(aim_world, point)
+			exposed = not hit.is_empty() and hit.point.distance_to(point) < fx_hull_span() * 0.035
+		var score: float = facing if exposed else -INF
+		scores.append(score)
+		if score > best:
+			best = score
+			chosen = scores.size() - 1
+	if chosen >= 0:
+		if _fx_active_mount >= 0 and scores[_fx_active_mount] >= best - 0.16:
+			chosen = _fx_active_mount
+		_fx_active_mount = chosen
+	return chosen
+
+
+## Select authored turret bases projected onto the displayed hull, with a
+## visible-mesh fallback when an original site does not match this model.
+func fx_mount_world(aim_world: Vector3, _electronic: bool = false) -> Vector3:
+	var chosen := _select_fx_mount(aim_world)
+	if chosen >= 0:
+		var at: Vector3 = hull_root.to_global(_fx_mount_sites[chosen].point)
+		return at + (aim_world - at).normalized() * 0.015
+	var point := fx_contact_world(aim_world)
+	return point + (aim_world - point).normalized() * 0.015
+
+
+## A guided missile can eject along a mount's normal before turning towards
+## its target; it does not require a straight firing ray from that mount.
+func fx_mount_frame_world(aim_world: Vector3) -> Dictionary:
+	var chosen := _select_fx_mount(aim_world, false)
+	if chosen >= 0:
+		return _fx_mount_frame_world(chosen)
+	var at := fx_mount_world(aim_world)
+	return {"origin": at, "normal": (aim_world - at).normalized(), "mount_index": -1}
+
+
+func _fx_mount_frame_world(index: int) -> Dictionary:
+	var site: Dictionary = _fx_mount_sites[index]
+	var normal: Vector3 = (hull_root.global_basis * site.normal).normalized()
+	return {"origin": hull_root.to_global(site.point) + normal * 0.015,
+		"normal": normal, "mount_index": index}
+
+
+## Use separate authored bases for a salvo. Facing keeps launches on a useful
+## side of the hull; separation prevents adjacent/duplicate bases reading as one.
+func fx_mount_frames_world(aim_world: Vector3, count: int, require_exposed: bool = false) -> Array[Dictionary]:
+	if require_exposed: return fx_cannon_mount_frames_world(aim_world, count)
+	var frames: Array[Dictionary] = []
+	if count <= 0: return frames
+	frames.append(fx_mount_frame_world(aim_world))
+	var span := maxf(fx_hull_span(), 0.001)
+	while frames.size() < mini(count, _fx_mount_sites.size()):
+		var best := -INF
+		var chosen := -1
+		for index in range(_fx_mount_sites.size()):
+			var frame := _fx_mount_frame_world(index)
+			var separation := INF
+			for selected in frames:
+				separation = minf(separation, frame.origin.distance_to(selected.origin) / span)
+			if separation < 0.01: continue
+			var facing: float = frame.normal.dot((aim_world - frame.origin).normalized())
+			var score := facing + separation * 1.75
+			if score > best:
+				best = score
+				chosen = index
+		if chosen < 0: break
+		frames.append(_fx_mount_frame_world(chosen))
+	return frames
+
+
+func fx_cannon_mount_frames_world(aim_world: Vector3, count: int) -> Array[Dictionary]:
+	var candidates: Array[Dictionary] = []
+	var result: Array[Dictionary] = []
+	var span := maxf(fx_hull_span(), .001)
+	var camera := get_viewport().get_camera_3d()
+	for index in range(_fx_mount_sites.size()):
+		var frame := _fx_mount_frame_world(index)
+		var direction: Vector3 = (aim_world - frame.origin).normalized()
+		# Rank clear firing arcs first. Occlusion must not remove authored guns
+		# from a broadside or turn a whole attack off while the hull is turning.
+		# Keep the actual base; normal depth testing hides the obstructed segment.
+		frame.exposed = _fx_ray_surface(frame.origin + direction * .001, aim_world).is_empty()
+		candidates.append(frame)
+	while result.size() < count and not candidates.is_empty():
+		var chosen := -1
+		var best := -INF
+		for i in range(candidates.size()):
+			var frame := candidates[i]
+			var separation := 1.0
+			var screen_separation := 1.0
+			for selected in result:
+				separation = minf(separation, frame.origin.distance_to(selected.origin) / span)
+				if camera != null:
+					screen_separation = minf(screen_separation, camera.unproject_position(frame.origin).distance_to(camera.unproject_position(selected.origin)) / 100.0)
+			if separation < .015: continue
+			var direction: Vector3 = (aim_world - frame.origin).normalized()
+			var score: float = separation * 2.0 + screen_separation + frame.normal.dot(direction) * .3
+			if frame.exposed: score += 10.0
+			if camera != null:
+				score += maxf(0.0, frame.normal.dot((camera.global_position - frame.origin).normalized())) * .4
+			if score > best:
+				best = score
+				chosen = i
+		if chosen < 0: break
+		result.append(candidates[chosen])
+		candidates.remove_at(chosen)
+	return result
+
+
+func fx_cannon_mount_world(_aim_world: Vector3, index: int) -> Vector3:
+	# The volley already validated and reserved this exact original base.
+	# Follow its transform without switching to another gun during the beam.
+	return _fx_mount_frame_world(index).origin
+
+
+func fx_shield_slot(from_world:Vector3) -> int:
+	_ensure_shield_fx()
+	return _shield_fx.nearest_slot(hull_root.to_local(from_world))
+
+
+func fx_contact_world(from_world: Vector3, shield: bool = false, patch: Vector2 = Vector2.ZERO,
+		shield_slot:int=-1) -> Vector3:
+	if hull_root == null:
+		return global_position
+	if shield:
+		_ensure_shield_fx()
+		var index:=shield_slot if shield_slot>=0 else fx_shield_slot(from_world)
+		if index>=0:
+			var spread:=patch
+			for attempt in range(4):
+				var contact:Vector3=hull_root.to_global(_shield_fx.point_on_slot(index,spread))
+				if spread.is_zero_approx(): return contact
+				var blocker:=_fx_ray_surface(from_world,contact)
+				if blocker.is_empty() or from_world.distance_to(blocker.point)+0.001>=from_world.distance_to(contact):
+					return contact
+				# Keep secondary warheads on the exposed part of this exact plate,
+				# rather than letting a wide offset enter an asymmetric hull.
+				spread*=0.5
+			return hull_root.to_global(_shield_fx.point_on_slot(index))
+	_prepare_fx_surfaces()
+	var box := _fx_hull_bounds()
+	var center := fx_center_world()
+	var direction := (from_world - center).normalized()
+	if direction.length_squared() < 0.000001:
+		direction = global_basis.z.normalized()
+	var basis := Basis.looking_at(direction, Vector3.UP if absf(direction.y) < 0.95 else Vector3.FORWARD)
+	var aim := center + (basis.x * patch.x + basis.y * patch.y) * box.size.length() * hull_root.global_basis.get_scale().x * 0.22
+	# Pick an authored damage site on the incoming side, then return the real
+	# first triangle hit. No authored point is allowed to leave a floating hit.
+	var authored := {}
+	var authored_score := INF
+	for local_point in _fx_damage_sites:
+		var point := hull_root.to_global(local_point)
+		var score := point.distance_squared_to(aim)
+		if score >= authored_score:
+			continue
+		var contact := _fx_ray_surface(from_world, point)
+		if not contact.is_empty() and contact.point.distance_to(point) < fx_hull_span() * 0.04:
+			authored = contact
+			authored_score = score
+	if not authored.is_empty():
+		return authored.point
+	var hit := _fx_ray_surface(from_world, aim)
+	if not hit.is_empty():
+		return hit.point
+	# Asymmetric hulls can have empty space at their bounds center. Aim at a
+	# nearby actual triangle, then intersect towards it to find the near face.
+	var surface_aim := center
+	var nearest := INF
+	for entry in _fx_surfaces:
+		var mi: MeshInstance3D = entry.node
+		if not is_instance_valid(mi) or not mi.visible:
+			continue
+		for sample in entry.data.samples:
+			var point: Vector3 = mi.to_global(sample)
+			var distance := point.distance_squared_to(aim)
+			if distance < nearest:
+				nearest = distance
+				surface_aim = point
+	if nearest < INF:
+		hit = _fx_ray_surface(from_world, surface_aim)
+		return hit.point if not hit.is_empty() else surface_aim
+	return center
+
 var _shield_fx: Node3D = null
 
 func _all_meshes(root: Node) -> Array[MeshInstance3D]:
@@ -1979,8 +2383,7 @@ func _hull_local_bounds() -> AABB:
 		box = AABB(Vector3(-1.3, -0.45, -0.65), Vector3(2.6, 0.9, 1.3))
 	return box
 
-## 建护盾节点（含可见壳）。每艘船在 setup 时就建好，
-## 这样「所有船都有壳」而不是「被打过才有壳」。
+## setup 时预建原贴花池。正式壳隐藏，受击时只点亮已有曲面片。
 func _ensure_shield_fx() -> void:
 	if _shield_fx != null and is_instance_valid(_shield_fx):
 		return
@@ -1990,24 +2393,46 @@ func _ensure_shield_fx() -> void:
 	_shield_fx.name = "ShieldImpacts"
 	hull_root.add_child(_shield_fx)
 	_shield_fx.setup(_hull_local_bounds(), tier_level(ship.ship_class), _hull_bow_dir(), ship.ship_key)
+	_shield_fx.set_process(not feedback_managed)
+
+
+func receive_impact(event: Dictionary, contact_world: Vector3, _source_world: Vector3) -> void:
+	var layers:Dictionary=event.get("layers",{})
+	var layer:StringName=event.get("layer",&"hull")
+	flash_hit(layer)
+	if layer==&"shield" and float(layers.get(&"shield",0.0))>0.0:
+		# The beam, endpoint flash and curved response share the same surface.
+		# This is a certified damage event: an angular debug cutoff cannot send
+		# a valid shield hit through to the hull or suppress the receiving patch.
+		_ensure_shield_fx()
+		_shield_fx.fire_slot(_shield_fx.nearest_slot(hull_root.to_local(contact_world)))
+	_update_bars()
+	var bars := {&"shield":_shield_bar,&"armor":_armor_bar,&"hull":_hull_bar}
+	for broken in event.get("breaks",[]):
+		if bars.has(broken):
+			_bar_feedback[bars[broken]].break_age=0.0
+	for hit_layer in bars:
+		if float(layers.get(hit_layer,0.0))>0.0:
+			var state:Dictionary=_bar_feedback[bars[hit_layer]]
+			if int(event.get("quality",3))>=5:
+				state.strength=maxf(state.strength,1.5)
+			_update_bar_material(state)
+
+
+func feedback_screen_position(camera: Camera3D) -> Vector2:
+	var box:=_fx_hull_bounds()
+	var low:=Vector2(INF,INF)
+	var high:=Vector2(-INF,-INF)
+	for i in range(8):
+		var p:=camera.unproject_position(hull_root.to_global(box.get_endpoint(i)))
+		low=low.min(p)
+		high=high.max(p)
+	return Vector2((low.x+high.x)*0.5,low.y-14.0)
 
 ## 火力引导：把攻击者位置换算成护盾壳面上的一点（世界米）。
 ## 曳光线与命中点都用它，于是火炮看起来打在壳上，而不是打在船体中心。
 func shield_impact_point(world_meters: Vector3) -> Vector3:
-	_ensure_shield_fx()
-	if _shield_fx == null:
-		return world_meters
-	var local := hull_root.to_local(world_meters / METERS_PER_UNIT)
-	var axes: Vector3 = _shield_fx.axes
-	if axes.x < 1e-6:
-		return world_meters
-	# 吸附到最近的固定锚点：曳光线因此只从这几个点打进来
-	var dir: Vector3 = _shield_fx.anchor_dir_for(local)
-	if dir == Vector3.ZERO:
-		# 没有锚点落在吸附范围内 ⇒ 不做假吸附，曳光线仍指向船体
-		return world_meters
-	var on_shell: Vector3 = _shield_fx.anchor_world_local(dir)
-	return hull_root.to_global(on_shell) * METERS_PER_UNIT
+	return fx_contact_world(world_meters/METERS_PER_UNIT,true)*METERS_PER_UNIT
 
 ## 护盾壳 / 锚点调试小球的可见性（AI 桥与调试面板用）。
 func set_shield_shell_visible(on: bool) -> void:

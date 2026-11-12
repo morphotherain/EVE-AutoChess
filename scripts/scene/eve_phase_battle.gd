@@ -46,14 +46,13 @@ var _versus_hook: Callable = Callable()
 ##   结算时用它把阵亡的我方舰船翻译成 `field` 下标，交给 `resolve_battle()` 删。
 var _own_field_index_cb: Callable = Callable()
 var _on_unit_destroyed_cb: Callable = Callable()
-var _on_shot_fired_cb: Callable = Callable()
 
 
 func setup(p_run: EveRunState, p_hud: EveHudRoot, p_audio: EveAudio,
 		p_arena: EveBattleArena, p_resolve, p_get_sim: Callable,
 		p_own_ships: Callable, p_enemy_ships: Callable,
 		p_own_field_index: Callable,
-		p_on_unit_destroyed: Callable, p_on_shot_fired: Callable) -> void:
+		p_on_unit_destroyed: Callable) -> void:
 	_run = p_run
 	_hud = p_hud
 	_audio = p_audio
@@ -64,7 +63,6 @@ func setup(p_run: EveRunState, p_hud: EveHudRoot, p_audio: EveAudio,
 	_enemy_ships_cb = p_enemy_ships
 	_own_field_index_cb = p_own_field_index
 	_on_unit_destroyed_cb = p_on_unit_destroyed
-	_on_shot_fired_cb = p_on_shot_fired
 
 
 ## 准备阶段每次都把「敌方视觉已生成」的标记清掉（重开 / 新节点都要重新生成）。
@@ -158,7 +156,12 @@ func start() -> EveBattleSimulator:
 	# ⚠️ 这一行同样是「少了它一切照跑、只是什么都看不见」的类型。
 	#    verify_run 的 `_step_d_hit` 直接数 arena.battle_fx.active_count()
 	#    与 hud.damage_feed.active_count()，就是为了捕获这种静默断线。
-	sim.shot_fired.connect(_on_shot_fired_cb)
+	sim.attack_resolved.connect(_arena.fx_attack)
+	sim.electronic_state_changed.connect(_arena.fx_electronic_state)
+	sim.electronic_attempted.connect(_arena.fx_electronic_attempt)
+	_arena.fx_electronic_state(sim.electronic_snapshot())
+	sim.missile_launched.connect(_arena.fx_launch_missile)
+	sim.missile_cancelled.connect(_arena.battle_fx.cancel_missile)
 
 	# 顶条的倒计时切成「战斗时限」
 	#
@@ -195,6 +198,9 @@ func tick(delta: float) -> void:
 		# ★ 2026-10-27：传 `interp_alpha()` —— 仿真 30 Hz、渲染 60~240 Hz，
 		#   不插值的话中间那几帧画面完全静止、再一帧跳几像素（用户报的"抖动/发糊"）。
 		_arena.sync_ships(sim.ships, delta, sim.interp_alpha())
+		_arena.battle_fx.sync_weapon_audio(sim.ships, not sim.finished)
+		if sim.finished:
+			_arena.battle_fx.clear_flights()
 
 
 ## 把模拟器新产生的日志搬进 HUD（只搬增量的那一截）。
@@ -313,6 +319,7 @@ static func reason_txt(reason: String) -> String:
 ##    玩家原话：「打捞要么只打捞我方的，要么打捞敌我双方的，断然没有只打捞
 ##    敌方的道理」。⇒ 两边一起收，`_set_wreck_from()` 仍按**费用最高**挑一艘。
 func finished(winner_team: int) -> void:
+	_arena.fx_electronic_state({"time": 0.0, "relations": [], "jams": []})
 	var own: Array = _own_ships_cb.call()
 	var enemy: Array = _enemy_ships_cb.call()
 	var destroyed: Array = []

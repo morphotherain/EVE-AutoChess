@@ -6,6 +6,7 @@ const FONT := preload("res://scripts/ui/eve_font.gd")
 const THEME := preload("res://scripts/ui/eve_button_theme.gd")
 
 func _ready() -> void:
+	EveUiAudio.play("run.defeat")
 	var bg := ColorRect.new()
 	bg.color = Color(0.012, 0.02, 0.028, 1.0)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -31,6 +32,7 @@ func _ready() -> void:
 
 	var back := Button.new()
 	back.text = "返回主菜单"
+	back.set_meta("ui_audio_slot", "ui.cancel")
 	back.custom_minimum_size = Vector2(200, 48)
 	back.position = Vector2(860, 540)
 	THEME.apply(back, "accent")

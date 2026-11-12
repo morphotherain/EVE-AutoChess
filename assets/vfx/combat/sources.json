@@ -1,0 +1,145 @@
+{
+  "source": "EVE SharedCache textures located through the GrassRootAI resource index",
+  "conversion": "DDS decoded to lossless RGBA PNG, no channel or color edits",
+  "resources": [
+    {
+      "file": "beam_profile.png",
+      "uri": "res:/texture/fx/beam/bezierbeam_wide_01b.dds",
+      "cache_relative_path": "85/85548ea9b16d510e_3159e92baa67cd3856623043ece96976",
+      "source_sha256": "380642dff0e656ccbf2ad66cd0086e7919b4d26c3f2b052fb2cc2139e4f71e75",
+      "size": [
+        256,
+        256
+      ]
+    },
+    {
+      "file": "pulse_stream.png",
+      "uri": "res:/texture/fx/beam/pulse_stream_01a.dds",
+      "cache_relative_path": "e4/e442753ca5cf491f_eaf67e45a1eec30771a14f9c7fd94c1f",
+      "source_sha256": "f88fac72924840a1ed3a75e9f62c1b15d9934a35e41af28af015fe592c769bc5",
+      "size": [
+        64,
+        1024
+      ]
+    },
+    {
+      "file": "electric_mask.png",
+      "uri": "res:/fisfx/generic/warp_disruption/lightningwcaustics_01a.dds",
+      "cache_relative_path": "bc/bcfb7e55c1e75fd0_39ca042bc0e57ec28f24a6a4718c3273",
+      "source_sha256": "593de45c8100cf6a1bc8b7912b11d7a3f4d629a9fe6c3a868f2f9a584589b3e8",
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "file": "smoke_atlas.png",
+      "uri": "res:/texture/fx/motionparticles/mpartical_causticsmoke_01c.dds",
+      "cache_relative_path": "f4/f471fd880387b5c0_0bdd239fcd8ca8eff6320281e07d0097",
+      "source_sha256": "00e6e1620b1663784dd7c5f7ab4e53ed14f93cd8bc685712397b3a28913f2baa",
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "file": "impact_fire.png",
+      "uri": "res:/texture/fx/motionparticles/explosion/particles/particle_06b.dds",
+      "cache_relative_path": "05/05eaa7dbf55ed171_4feb55ee5dc883ab8b0633e88e6e82f3",
+      "source_sha256": "99b7d860ceec2c9805cebbfd36799baf78c78850e475b12bb468e35b715866d9",
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "file": "impact_fire_flow.png",
+      "uri": "res:/texture/fx/motionparticles/explosion/particles/particle_06b_flw.dds",
+      "cache_relative_path": "d9/d9379141077384c1_9df5d250cb37dabdfbfb0170a62162dc",
+      "source_sha256": "5581645d5bea40d427cec66014f317415cb9bda3ee136949aef2d715a6ea57e3",
+      "size": [
+        512,
+        512
+      ]
+    },
+    {
+      "file": "impact_splash.png",
+      "uri": "res:/texture/fx/motionparticles/explosion/particles/particle_06a_elementb.dds",
+      "cache_relative_path": "ab/abe95ead5cdb5979_22b1caffee76a54d70d0192d78920960",
+      "source_sha256": "56795d414cebf6ed607ac7074943dc71bbc91c69378786a7efdfa1b58ed63101",
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "file": "impact_splash_flow.png",
+      "uri": "res:/texture/fx/motionparticles/explosion/particles/particle_06a_elementb_flw.dds",
+      "cache_relative_path": "8b/8bfb4bff9c40e309_5275b1587aebd9fe5103f98cbae95d6e",
+      "source_sha256": "5d539a829ddb86ce2dbc7376a9e8be0e91a72edd9f6ab1f3d536d5b19aaaac58",
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "file": "impact_electric.png",
+      "uri": "res:/texture/fx/motionparticles/electric/electro_loop_01a.dds",
+      "cache_relative_path": "34/34d6c13328690436_3eebfd8012b84cd8269f21eb7bd52d12",
+      "source_sha256": "104e96097663013395a12750e65ce822e6cfd30a9cbd5b8f18952d63143c2937",
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "file": "impact_orange_ramp.png",
+      "uri": "res:/texture/fx/gradients/ramp_orange_03c.dds",
+      "cache_relative_path": "68/680f35c20e2c6ffe_cbe3cecb28860ac67c5faa5f473721a6",
+      "source_sha256": "b5cdd4e397c6c22f651db634cb3608384efe8a81b303219c1053c77f7d784640",
+      "size": [
+        512,
+        8
+      ]
+    },
+    {
+      "file": "impact_heat_ramp.png",
+      "uri": "res:/texture/fx/gradients/selfillumination/si_01a.dds",
+      "cache_relative_path": "6e/6e818abd099315f1_a48ad11576fb46faee1e47c2ef330f67",
+      "source_sha256": "235caddea85112287eadcc1973a1d64bc98090f1563a9158751e324e0d02c38c",
+      "size": [
+        512,
+        16
+      ]
+    }
+  ],
+  "effect_sources": [
+    {
+      "uri": "res:/dx9/model/turret/launcher/heavy/heavy_impact_nova.black",
+      "cache_relative_path": "4e/4e44004a36456b7e_d9bbf45281eef91d53880510a158c021",
+      "source_sha256": "1b7451439a9bb8e3c9e006039ed37263b086c84e0b972c985f4b7d0746fe1241",
+      "reused_parts": [
+        "MVRamp_Particle_Explosion: particle_06b + particle_06b_flw",
+        "MVRamp_Particle_Splash: particle_06a_elementb + particle_06a_elementb_flw",
+        "ramp_orange_03c + si_01a"
+      ],
+      "usage": "Ship destruction only; missile impact now uses Scourge"
+    },
+    {
+      "uri": "res:/dx9/model/turret/launcher/heavy/heavy_impact_mjolnir.black",
+      "cache_relative_path": "34/34edfd83a9583c41_54865fa4f10028d1f9cf9545b8a6e93b",
+      "source_sha256": "255b047691c2b555b30f10f0ee3d4eb53fb9cb594daf09ccb36dbcd4ad2d7c96",
+      "reused_parts": [
+        "Electricity child node 79 / effect node 90: electro_loop_01a",
+        "motionvector.fx AtlasInfo=[8,8,64,1]"
+      ],
+      "usage": "Hybrid weapon residual electricity"
+    },
+    {
+      "uri": "res:/dx9/model/turret/launcher/heavy/heavy_impact_scourge.black",
+      "manifest": "scourge/sources.json",
+      "usage": "Complete luminous missile composition adapted to Godot; no smoke emitters"
+    }
+  ],
+  "adaptation": "Original atlases decoded losslessly. Godot shaders/composition, colors, scale and timing are local adaptations, not the full original renderer."
+}

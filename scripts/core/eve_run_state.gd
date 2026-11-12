@@ -44,6 +44,8 @@ signal phase_changed(phase: int)
 signal offers_changed()
 signal log_event(text: String, category: StringName)
 signal run_ended(cleared: bool)
+## Presentation only. Only the local player's scene subscribes; AI economies stay silent.
+signal feedback_requested(slot_id: String)
 
 enum Phase { PREP, BATTLE, RESOLVE, ENDING }
 enum Ending { NONE, CLEARED, EVACUATED }
@@ -972,7 +974,7 @@ func buy(index: int) -> Dictionary:
 	var is_salvage := d.has("from_node")
 	var cost := 0 if is_salvage else int(d.get("cost", 1))
 	if coin < cost:
-		return _deny("星币不足（需 %d，现有 %d）" % [cost, coin])
+		return _deny("星币不足（需 %d，现有 %d）" % [cost, coin], "shop.insufficient")
 	if bench.size() >= BENCH_SLOTS:
 		return _deny("备战席已满（%d / %d）—— 先拖一艘上场或卖掉" % [bench.size(), BENCH_SLOTS])
 
@@ -1023,6 +1025,7 @@ func buy(index: int) -> Dictionary:
 
 	offers_changed.emit()
 	changed.emit()
+	feedback_requested.emit("shop.buy")
 	return {"ok": true, "reason": "", "data": d}
 
 
@@ -1049,10 +1052,11 @@ func refresh() -> Dictionary:
 	if phase != Phase.PREP:
 		return _deny("只有准备阶段能刷新")
 	if coin < REFRESH_COST:
-		return _deny("星币不足（刷新需 %d）" % REFRESH_COST)
+		return _deny("星币不足（刷新需 %d）" % REFRESH_COST, "shop.insufficient")
 	coin -= REFRESH_COST
 	roll_shop()
 	log_event.emit("刷新加速列表 −%d ◆" % REFRESH_COST, &"buy")
+	feedback_requested.emit("shop.refresh")
 	return {"ok": true, "reason": "", "data": {}}
 
 
@@ -1062,7 +1066,7 @@ func levelup() -> Dictionary:
 		return _deny("只有准备阶段能加速等级")
 	if level < MAX_LEVEL:
 		if coin < BUY_XP_COST:
-			return _deny("星币不足（加速等级需 %d）" % BUY_XP_COST)
+			return _deny("星币不足（加速等级需 %d）" % BUY_XP_COST, "shop.insufficient")
 		coin -= BUY_XP_COST
 		log_event.emit("加速等级 −%d ◆ · 经验 +%d" % [BUY_XP_COST, BUY_XP_AMOUNT], &"buy")
 		add_xp(BUY_XP_AMOUNT)
@@ -1070,7 +1074,7 @@ func levelup() -> Dictionary:
 		if overtier >= MAX_TIER - MAX_LEVEL:
 			return _deny("加速列表已到最高档（超频 %d）" % (MAX_TIER - MAX_LEVEL))
 		if coin < OVERTIER_COST:
-			return _deny("星币不足（超频需 %d）" % OVERTIER_COST)
+			return _deny("星币不足（超频需 %d）" % OVERTIER_COST, "shop.insufficient")
 		coin -= OVERTIER_COST
 		overtier += 1
 		# ★ 2026-10-31（仅炼狱）：第二次超频可能额外 +1 上场名额，
@@ -1087,14 +1091,18 @@ func levelup() -> Dictionary:
 		log_event.emit(tier_line, &"buy")
 		roll_shop()
 	changed.emit()
+	feedback_requested.emit("shop.upgrade")
 	return {"ok": true, "reason": "", "data": {}}
 
 
 func set_shop_locked(on: bool) -> void:
+	var was_locked := shop_locked
 	shop_locked = on
 	log_event.emit("加速列表已锁定（本节点结束后不重摇）" if on
 			else "加速列表已解锁", &"system")
 	changed.emit()
+	if was_locked != on:
+		feedback_requested.emit("shop.lock" if on else "shop.unlock")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1722,6 +1730,8 @@ func _try_merge() -> bool:
 		if not _merge_once():
 			break
 		any = true
+	if any:
+		feedback_requested.emit("fleet.merge")
 	return any
 
 
@@ -1883,11 +1893,11 @@ static func _merge_buffs_into(dst: Dictionary, src) -> void:
 ##      ② 不需要「备战席有没有空位」这个前提（永远够）。
 func deploy_from_bench(bench_index: int, row: int, col: int) -> Dictionary:
 	if phase != Phase.PREP:
-		return _deny("只有准备阶段能布阵")
+		return _deny("只有准备阶段能布阵", "fleet.invalid")
 	if bench_index < 0 or bench_index >= bench.size():
-		return _deny("这一格是空的")
+		return _deny("这一格是空的", "fleet.invalid")
 	if not _cell_ok(row, col):
-		return _deny("只能放在我方部署区（棋盘下 4 行）")
+		return _deny("只能放在我方部署区（棋盘下 4 行）", "fleet.invalid")
 
 	# ── 落点有人 ⇒ 互换（先判这个，因为它要跳过上场位上限）──────────────
 	var occ := field_index_at(row, col)
@@ -1906,11 +1916,12 @@ func deploy_from_bench(bench_index: int, row: int, col: int) -> Dictionary:
 				entry_name(e0), int(e0.get("star", 1)), row + 1, col + 1,
 				other_name, other_star], &"deploy")
 		changed.emit()
+		feedback_requested.emit("fleet.swap")
 		return {"ok": true, "reason": "", "data": {"swap": true}}
 
 	if field.size() >= field_limit():
 		return _deny("上场已满 %d／%d —— 先把场上一艘拖回备战席（或出售）"
-				% [field.size(), field_limit()])
+				% [field.size(), field_limit()], "fleet.invalid")
 
 	var e: Dictionary = bench[bench_index]
 	e["cell"] = Vector2i(row, col)
@@ -1921,6 +1932,7 @@ func deploy_from_bench(bench_index: int, row: int, col: int) -> Dictionary:
 			String(d.get("name", String(e.get("ship_key", "?")))), int(e.get("star", 1)),
 			row + 1, col + 1, field.size(), field_limit()], &"deploy")
 	changed.emit()
+	feedback_requested.emit("fleet.deploy")
 	return {"ok": true, "reason": "", "data": {}}
 
 
@@ -1932,36 +1944,40 @@ func deploy_from_bench(bench_index: int, row: int, col: int) -> Dictionary:
 ##    此时退回原行为（拒绝），不去猜。
 func move_field(field_index: int, row: int, col: int) -> Dictionary:
 	if phase != Phase.PREP:
-		return _deny("只有准备阶段能布阵")
+		return _deny("只有准备阶段能布阵", "fleet.invalid")
 	if field_index < 0 or field_index >= field.size():
-		return _deny("这一格是空的")
+		return _deny("这一格是空的", "fleet.invalid")
 	if not _cell_ok(row, col):
-		return _deny("只能放在我方部署区（棋盘下 4 行）")
+		return _deny("只能放在我方部署区（棋盘下 4 行）", "fleet.invalid")
 	var occ := field_index_at(row, col)
 	if occ >= 0 and occ != field_index:
 		var mine = field[field_index].get("cell", Vector2i(-1, -1))
 		if not (mine is Vector2i) or mine.x < 0:
-			return _deny("这一格已经有船了")
+			return _deny("这一格已经有船了", "fleet.invalid")
 		var a_name := entry_name(field[field_index])
 		var b_name := entry_name(field[occ])
 		field[field_index]["cell"] = Vector2i(row, col)
 		field[occ]["cell"] = mine
 		log_event.emit("互换：%s ↔ %s" % [a_name, b_name], &"deploy")
 		changed.emit()
+		feedback_requested.emit("fleet.swap")
 		return {"ok": true, "reason": "", "data": {"swap": true}}
+	var old_cell = field[field_index].get("cell", Vector2i(-1, -1))
 	field[field_index]["cell"] = Vector2i(row, col)
 	changed.emit()
+	if old_cell != Vector2i(row, col):
+		feedback_requested.emit("fleet.move")
 	return {"ok": true, "reason": "", "data": {}}
 
 
 ## 把场上第 index 艘撤回备战席（腾出人口）
 func recall_to_bench(field_index: int) -> Dictionary:
 	if phase != Phase.PREP:
-		return _deny("只有准备阶段能调整编制")
+		return _deny("只有准备阶段能调整编制", "fleet.invalid")
 	if field_index < 0 or field_index >= field.size():
-		return _deny("这一格是空的")
+		return _deny("这一格是空的", "fleet.invalid")
 	if bench.size() >= BENCH_SLOTS:
-		return _deny("备战席已满（%d／%d）" % [bench.size(), BENCH_SLOTS])
+		return _deny("备战席已满（%d／%d）" % [bench.size(), BENCH_SLOTS], "fleet.invalid")
 	var e: Dictionary = field[field_index]
 	e["cell"] = Vector2i(-1, -1)
 	bench.append(e)
@@ -1971,6 +1987,7 @@ func recall_to_bench(field_index: int) -> Dictionary:
 			String(d.get("name", "?")), int(e.get("star", 1)),
 			field.size(), field_limit()], &"deploy")
 	changed.emit()
+	feedback_requested.emit("fleet.reserve")
 	return {"ok": true, "reason": "", "data": {}}
 
 
@@ -2071,6 +2088,7 @@ func _do_sell(e: Dictionary, index: int, from_bench: bool) -> Dictionary:
 	# ⚠️ 卖掉场上的船【不】自动从备战席补人（2026-09-20）——
 	#    那同样是在替玩家做「谁上场」的决定。见「已删除：auto_deploy()」。
 	changed.emit()
+	feedback_requested.emit("shop.sell")
 	return {"ok": true, "reason": "", "data": {"refund": back}}
 
 
@@ -3281,6 +3299,9 @@ func resolve_battle(winner_team: int, destroyed: Array = [],
 	phase = Phase.RESOLVE
 	phase_changed.emit(phase)
 	changed.emit()
+	feedback_requested.emit("round.win" if won else "round.lose")
+	if beacon < before:
+		feedback_requested.emit("round.damage")
 	return {"damage": dmg, "beacon": beacon, "won": won,
 			"wreck": not wrecks.is_empty(),
 			"wreck_count": wrecks.size()}
@@ -3310,6 +3331,8 @@ func advance() -> void:
 		node_index += 1
 	var inc := income()
 	coin += inc
+	if inc > 0:
+		feedback_requested.emit("economy.income")
 	# ★ 2026-10-31：日志补上「关卡奖励」那一段（炼狱专属）。
 	#   基础收入也顺手改成读难度档 —— 原来硬写 `BASE_INCOME`，
 	#   哪天一档把 base_income 调成 6，日志就会和实际到账对不上。
@@ -3397,7 +3420,8 @@ static func apply_enemy_scaling(ship: EveShip, star: int, power_scale: float) ->
 #  工具
 # ══════════════════════════════════════════════════════════════════
 
-static func _deny(reason: String) -> Dictionary:
+func _deny(reason: String, feedback: String = "ui.reject") -> Dictionary:
+	feedback_requested.emit(feedback)
 	return {"ok": false, "reason": reason, "data": {}}
 
 

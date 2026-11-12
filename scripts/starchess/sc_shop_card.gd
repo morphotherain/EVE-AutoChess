@@ -38,6 +38,7 @@ var _panel_sb: StyleBoxFlat = null
 
 
 func _ready() -> void:
+	mouse_entered.connect(func(): EveUiAudio.play("ui.hover"))
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_build()

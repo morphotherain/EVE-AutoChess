@@ -1,0 +1,918 @@
+{
+  "schema": "eve-ui-audio-runtime/v1",
+  "source": "EVE Serenity 24.01.3557205 · Interface",
+  "selection_created_at": "2026-11-10T23:08:17+08:00",
+  "reference_peak_dbfs": -6.0,
+  "reference_boost_limit_db": 24.0,
+  "slots": {
+    "ui.hover": {
+      "name": "悬停 / 焦点进入",
+      "status": "assigned",
+      "clips": [
+        "event-92077ab99e171624"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "ui.click": {
+      "name": "普通按钮点击",
+      "status": "assigned",
+      "clips": [
+        "event-34e8437a7abbe103"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "ui.confirm": {
+      "name": "确认 / 应用",
+      "status": "assigned",
+      "clips": [
+        "event-0c8e8dd2c7bae447"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "ui.cancel": {
+      "name": "取消 / 返回",
+      "status": "assigned",
+      "clips": [
+        "event-937387f06b71591f"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "ui.reject": {
+      "name": "操作被拒绝",
+      "status": "assigned",
+      "clips": [
+        "event-dc2b1b0163f6dbe8"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "ui.tab": {
+      "name": "切换标签 / 分类",
+      "status": "assigned",
+      "clips": [
+        "event-e21e6edfe84bab7b"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "ui.toggle_on": {
+      "name": "开关开启",
+      "status": "assigned",
+      "clips": [
+        "event-ffa48ba0b1e01cae"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "ui.toggle_off": {
+      "name": "开关关闭",
+      "status": "assigned",
+      "clips": [
+        "event-4e2f7420f0148278"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "ui.slider": {
+      "name": "滑块调整",
+      "status": "assigned",
+      "clips": [
+        "event-525d60d7a50be710"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "window.open": {
+      "name": "窗口打开",
+      "status": "assigned",
+      "clips": [
+        "event-3f34f10a90229924"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "window.close": {
+      "name": "窗口关闭",
+      "status": "assigned",
+      "clips": [
+        "event-8ee38de6d71edb9c"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "window.detail": {
+      "name": "舰船详情 / 图鉴打开",
+      "status": "assigned",
+      "clips": [
+        "event-36daee923ca6fdfb"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "menu.mode": {
+      "name": "切换玩法 / 难度",
+      "status": "assigned",
+      "clips": [
+        "event-731f4fbbab1bf313"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "menu.start": {
+      "name": "开始 / 继续游戏",
+      "status": "assigned",
+      "clips": [
+        "event-7e33d6d369b7d4c0"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "commander.select": {
+      "name": "选择指挥官",
+      "status": "assigned",
+      "clips": [
+        "event-9bb55a2991c6b5c0"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "shop.select": {
+      "name": "商店卡牌选中 / 预览",
+      "status": "assigned",
+      "clips": [
+        "event-aaae1c56ae1e076d"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "shop.buy": {
+      "name": "购买成功",
+      "status": "assigned",
+      "clips": [
+        "event-f315850763e978f0"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "shop.sell": {
+      "name": "出售 / 回收成功",
+      "status": "assigned",
+      "clips": [
+        "event-13f147d2b05f0936"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "shop.refresh": {
+      "name": "刷新商店",
+      "status": "assigned",
+      "clips": [
+        "event-22275567aef60e35"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "shop.lock": {
+      "name": "锁定商店",
+      "status": "assigned",
+      "clips": [
+        "event-d913de1f7b6b038f"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "shop.unlock": {
+      "name": "解除锁定",
+      "status": "assigned",
+      "clips": [
+        "event-0c8e8dd2c7bae447"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "shop.upgrade": {
+      "name": "升级商店 / 指挥官",
+      "status": "assigned",
+      "clips": [
+        "event-fe782ecb2cb604b1"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "shop.insufficient": {
+      "name": "金币 / 能量不足",
+      "status": "assigned",
+      "clips": [
+        "event-eb28e4c52c1ca5b8"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "economy.income": {
+      "name": "回合收入 / 奖励入账",
+      "status": "assigned",
+      "clips": [
+        "event-9c7fe5d882ed99bf"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "fleet.select": {
+      "name": "舰船 / 手牌选中",
+      "status": "assigned",
+      "clips": [
+        "event-52e19eba110d4f98"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "fleet.grab": {
+      "name": "拖起舰船",
+      "status": "assigned",
+      "clips": [
+        "event-6ebb8728afcd0b33"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "fleet.deploy": {
+      "name": "上阵 / 落位成功",
+      "status": "assigned",
+      "clips": [
+        "event-19e92fc32275ed50"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "fleet.move": {
+      "name": "移动布阵位置",
+      "status": "assigned",
+      "clips": [
+        "event-57590f00bf6c6965"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "fleet.swap": {
+      "name": "交换位置",
+      "status": "assigned",
+      "clips": [
+        "event-57590f00bf6c6965"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "fleet.reserve": {
+      "name": "返回备战席",
+      "status": "assigned",
+      "clips": [
+        "event-4e2f7420f0148278"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "fleet.invalid": {
+      "name": "上阵已满 / 无效落位",
+      "status": "assigned",
+      "clips": [
+        "event-378d90f881900bfa"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "fleet.merge": {
+      "name": "合成升星 / 合流",
+      "status": "assigned",
+      "clips": [
+        "event-618e9fbb32b61df7"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "round.prep": {
+      "name": "进入准备阶段",
+      "status": "assigned",
+      "clips": [
+        "event-282862d0148277a4"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "round.tick": {
+      "name": "普通倒计时",
+      "status": "assigned",
+      "clips": [
+        "event-d3e5f1dfd7efc280"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "round.urgent": {
+      "name": "临近开战提示",
+      "status": "assigned",
+      "clips": [
+        "event-9b4be14507c716d7"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "round.count3": {
+      "name": "开战读秒 3",
+      "status": "assigned",
+      "clips": [
+        "event-d3e5f1dfd7efc280"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "round.count2": {
+      "name": "开战读秒 2",
+      "status": "assigned",
+      "clips": [
+        "event-d3e5f1dfd7efc280"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "round.count1": {
+      "name": "开战读秒 1",
+      "status": "assigned",
+      "clips": [
+        "event-d3e5f1dfd7efc280"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "round.battle": {
+      "name": "开战 / 回合启动",
+      "status": "assigned",
+      "clips": [
+        "event-3228f36977dc8978"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "round.win": {
+      "name": "单轮胜利",
+      "status": "assigned",
+      "clips": [
+        "media-917091091"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "round.lose": {
+      "name": "单轮失败",
+      "status": "assigned",
+      "clips": [
+        "event-9af050fee7c4bb00"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "round.damage": {
+      "name": "玩家生命扣减",
+      "status": "assigned",
+      "clips": [
+        "event-b8d3533b1b4537a8"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "run.next": {
+      "name": "继续 / 下一节点",
+      "status": "assigned",
+      "clips": [
+        "event-7e33d6d369b7d4c0"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "run.victory": {
+      "name": "整局胜利 / 通关",
+      "status": "assigned",
+      "clips": [
+        "event-4d7dcaf29c5d0e1b"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    },
+    "run.defeat": {
+      "name": "整局失败 / 淘汰",
+      "status": "assigned",
+      "clips": [
+        "event-04e91a2a3604f0de"
+      ],
+      "gain_db": 0.0,
+      "mode": "random",
+      "origin": "manual"
+    }
+  },
+  "clips": {
+    "event-92077ab99e171624": {
+      "id": "event-92077ab99e171624",
+      "name": "msg_ListEntryEnter_play",
+      "file": "res://assets/audio/ui/clips/event-92077ab99e171624.wav",
+      "duration": 0.10915,
+      "peak_db": -31.34,
+      "content_hash": "e488379bbccd3e9d632df3571101e847c61fa064cb3cbf143840f9888948217c",
+      "source_ids": [
+        "157530353"
+      ],
+      "playback_gain_db": 36
+    },
+    "event-34e8437a7abbe103": {
+      "id": "event-34e8437a7abbe103",
+      "name": "msg_click_play",
+      "file": "res://assets/audio/ui/clips/event-34e8437a7abbe103.wav",
+      "duration": 0.08773,
+      "peak_db": -27.45,
+      "content_hash": "99763edb9bd9bf4ebf8b4d5c89febd165581a2c0dd156438425b1f3b835b5020",
+      "source_ids": [
+        "500934204"
+      ],
+      "playback_gain_db": 33.45
+    },
+    "event-0c8e8dd2c7bae447": {
+      "id": "event-0c8e8dd2c7bae447",
+      "name": "msg_pi_trade_send_play {d}",
+      "file": "res://assets/audio/ui/clips/event-0c8e8dd2c7bae447.wav",
+      "duration": 0.24669,
+      "peak_db": -11.71,
+      "content_hash": "0083f0331e9a22f714c5e9298b44f0f6483d48baeb26e5eb497857bdbc3382f6",
+      "source_ids": [
+        "284249123"
+      ],
+      "playback_gain_db": 17.71
+    },
+    "event-937387f06b71591f": {
+      "id": "event-937387f06b71591f",
+      "name": "msg_CCCancel_play",
+      "file": "res://assets/audio/ui/clips/event-937387f06b71591f.wav",
+      "duration": 0.1115,
+      "peak_db": -2.63,
+      "content_hash": "0e6e111d1e16d044477f7a3601c540f906ad20588696b824d792431915333a76",
+      "source_ids": [
+        "501864721"
+      ],
+      "playback_gain_db": 8.63
+    },
+    "event-dc2b1b0163f6dbe8": {
+      "id": "event-dc2b1b0163f6dbe8",
+      "name": "msg_error_play {d}",
+      "file": "res://assets/audio/ui/clips/event-dc2b1b0163f6dbe8.wav",
+      "duration": 0.20419,
+      "peak_db": -9.57,
+      "content_hash": "8d663feb9106a9e0e3f5a697b6d338244938ca5dd6087ba03ce148a74d5bd2a9",
+      "source_ids": [
+        "867682751"
+      ],
+      "playback_gain_db": 15.57
+    },
+    "event-e21e6edfe84bab7b": {
+      "id": "event-e21e6edfe84bab7b",
+      "name": "msg_OnTabClick_play",
+      "file": "res://assets/audio/ui/clips/event-e21e6edfe84bab7b.wav",
+      "duration": 0.23888,
+      "peak_db": -7.93,
+      "content_hash": "d71f8467a97df2b4b4b3411fa276095fb04addcaa4338e678ecd0c8483360eb0",
+      "source_ids": [
+        "512110010"
+      ],
+      "playback_gain_db": 13.93
+    },
+    "event-ffa48ba0b1e01cae": {
+      "id": "event-ffa48ba0b1e01cae",
+      "name": "ui_expand_play",
+      "file": "res://assets/audio/ui/clips/event-ffa48ba0b1e01cae.wav",
+      "duration": 0.11396,
+      "peak_db": -4.83,
+      "content_hash": "b3cb551aaa27364fa464538e12f45a6a7b7554d9b54acfdbdd898d1117c8385b",
+      "source_ids": [
+        "61625139"
+      ],
+      "playback_gain_db": 10.83
+    },
+    "event-4e2f7420f0148278": {
+      "id": "event-4e2f7420f0148278",
+      "name": "ui_collapse_play",
+      "file": "res://assets/audio/ui/clips/event-4e2f7420f0148278.wav",
+      "duration": 0.10342,
+      "peak_db": -3.6,
+      "content_hash": "457fef011a31b6ede15dad63c9e50d89e6143e34e17280aff38d37fb3c4b03f0",
+      "source_ids": [
+        "245263703"
+      ],
+      "playback_gain_db": 9.6
+    },
+    "event-525d60d7a50be710": {
+      "id": "event-525d60d7a50be710",
+      "name": "msg_pi_general_switch_play",
+      "file": "res://assets/audio/ui/clips/event-525d60d7a50be710.wav",
+      "duration": 0.02354,
+      "peak_db": -13.7,
+      "content_hash": "b8ca65c11fb3a42d54b8d36681901c101c338e5ef1e779709c4daa74c62ca768",
+      "source_ids": [
+        "414156592"
+      ],
+      "playback_gain_db": 19.7
+    },
+    "event-3f34f10a90229924": {
+      "id": "event-3f34f10a90229924",
+      "name": "ui_object_open_play",
+      "file": "res://assets/audio/ui/clips/event-3f34f10a90229924.wav",
+      "duration": 0.19856,
+      "peak_db": -15.34,
+      "content_hash": "29b6155541ffae6943c25b22537287bae832181b5542c27657f8df14a3763a5b",
+      "source_ids": [
+        "203517312"
+      ],
+      "playback_gain_db": 21.34
+    },
+    "event-8ee38de6d71edb9c": {
+      "id": "event-8ee38de6d71edb9c",
+      "name": "ui_object_close_play",
+      "file": "res://assets/audio/ui/clips/event-8ee38de6d71edb9c.wav",
+      "duration": 0.37598,
+      "peak_db": -14.06,
+      "content_hash": "994940e11be647da61c10f9ae573a70e0f0eac63132435f13230fe0a4d9af11e",
+      "source_ids": [
+        "457062673"
+      ],
+      "playback_gain_db": 20.06
+    },
+    "event-36daee923ca6fdfb": {
+      "id": "event-36daee923ca6fdfb",
+      "name": "project_discovery_analysis_window_open_play",
+      "file": "res://assets/audio/ui/clips/event-36daee923ca6fdfb.wav",
+      "duration": 0.5,
+      "peak_db": -5.2,
+      "content_hash": "8b0751ed06ce167f90c6043fa1338c829a192af06b3244fe3681d528a3f7dcb4",
+      "source_ids": [
+        "314111587"
+      ],
+      "playback_gain_db": 11.2
+    },
+    "event-731f4fbbab1bf313": {
+      "id": "event-731f4fbbab1bf313",
+      "name": "skills_planner_race_select_play",
+      "file": "res://assets/audio/ui/clips/event-731f4fbbab1bf313.wav",
+      "duration": 1.0,
+      "peak_db": -4.27,
+      "content_hash": "026f09a7b3ed28e325641fe721aa812bfbf8904376d70f20a16ea0b0f4701195",
+      "source_ids": [
+        "516037844"
+      ],
+      "playback_gain_db": 10.27
+    },
+    "event-7e33d6d369b7d4c0": {
+      "id": "event-7e33d6d369b7d4c0",
+      "name": "msg_CCNext_play",
+      "file": "res://assets/audio/ui/clips/event-7e33d6d369b7d4c0.wav",
+      "duration": 0.09565,
+      "peak_db": -1.27,
+      "content_hash": "03b0a1f2e2582b8f6c29a50effcf4b45e3c24dac8b1b231d2ce107a8dcf6aa5e",
+      "source_ids": [
+        "814431914"
+      ],
+      "playback_gain_db": 7.27
+    },
+    "event-9bb55a2991c6b5c0": {
+      "id": "event-9bb55a2991c6b5c0",
+      "name": "ui_icc_color_wheel_panel_light_play",
+      "file": "res://assets/audio/ui/clips/event-9bb55a2991c6b5c0.wav",
+      "duration": 0.1684,
+      "peak_db": -2.74,
+      "content_hash": "983447c5e8075a5214638d93d235884d9320cdad2caf3d5ff4b2c7d21efb050c",
+      "source_ids": [
+        "108183824"
+      ],
+      "playback_gain_db": 8.74
+    },
+    "event-aaae1c56ae1e076d": {
+      "id": "event-aaae1c56ae1e076d",
+      "name": "msg_CCAppRandom_play",
+      "file": "res://assets/audio/ui/clips/event-aaae1c56ae1e076d.wav",
+      "duration": 0.02,
+      "peak_db": -5.65,
+      "content_hash": "a823c77ff352b2c27dcb5657d9ee845772c7387b62ed25a72d2ff5018402e607",
+      "source_ids": [
+        "866968083"
+      ],
+      "playback_gain_db": 11.65
+    },
+    "event-f315850763e978f0": {
+      "id": "event-f315850763e978f0",
+      "name": "store_buy {d}",
+      "file": "res://assets/audio/ui/clips/event-f315850763e978f0.wav",
+      "duration": 0.12881,
+      "peak_db": -11.07,
+      "content_hash": "24216ea380815fe0f25106ac7a0fd9cca7bbe5f374e1016411d247f9cfa68d84",
+      "source_ids": [
+        "273141830"
+      ],
+      "playback_gain_db": 17.07
+    },
+    "event-13f147d2b05f0936": {
+      "id": "event-13f147d2b05f0936",
+      "name": "ui_money_in2_play",
+      "file": "res://assets/audio/ui/clips/event-13f147d2b05f0936.wav",
+      "duration": 3.11919,
+      "peak_db": -4.1,
+      "content_hash": "c2c3072244ab3bd59c475af77bd87000179c8b4c6da8cef3973b8136486b0c45",
+      "source_ids": [
+        "746722145"
+      ],
+      "playback_gain_db": 10.1
+    },
+    "event-22275567aef60e35": {
+      "id": "event-22275567aef60e35",
+      "name": "store_selectpage {d}",
+      "file": "res://assets/audio/ui/clips/event-22275567aef60e35.wav",
+      "duration": 0.08773,
+      "peak_db": -27.45,
+      "content_hash": "99763edb9bd9bf4ebf8b4d5c89febd165581a2c0dd156438425b1f3b835b5020",
+      "source_ids": [
+        "500934204"
+      ],
+      "playback_gain_db": 33.45
+    },
+    "event-d913de1f7b6b038f": {
+      "id": "event-d913de1f7b6b038f",
+      "name": "ui_complex_click3_play",
+      "file": "res://assets/audio/ui/clips/event-d913de1f7b6b038f.wav",
+      "duration": 0.3084,
+      "peak_db": -2.17,
+      "content_hash": "ff46cbc8c76ec70d471468b730cd99009277d8964044b76409a794fe51a8ce4d",
+      "source_ids": [
+        "973549647"
+      ],
+      "playback_gain_db": 8.17
+    },
+    "event-fe782ecb2cb604b1": {
+      "id": "event-fe782ecb2cb604b1",
+      "name": "activity_tracker_reset_play",
+      "file": "res://assets/audio/ui/clips/event-fe782ecb2cb604b1.wav",
+      "duration": 1.0,
+      "peak_db": -2.89,
+      "content_hash": "60d038d0fef1df7dd3effd635ec470dc9c659005c6ff8416705a7f82538c9786",
+      "source_ids": [
+        "902852549",
+        "942090444"
+      ],
+      "playback_gain_db": 8.89
+    },
+    "event-eb28e4c52c1ca5b8": {
+      "id": "event-eb28e4c52c1ca5b8",
+      "name": "ind_insufficientMaterials",
+      "file": "res://assets/audio/ui/clips/event-eb28e4c52c1ca5b8.wav",
+      "duration": 1.16575,
+      "peak_db": -3.0,
+      "content_hash": "066087ed971715a407ad5ba3a970caa85be2287ad3bf0c7081966d09e1f16d59",
+      "source_ids": [
+        "488356910"
+      ],
+      "playback_gain_db": 9.0
+    },
+    "event-9c7fe5d882ed99bf": {
+      "id": "event-9c7fe5d882ed99bf",
+      "name": "ui_notify_mission_rewards_play",
+      "file": "res://assets/audio/ui/clips/event-9c7fe5d882ed99bf.wav",
+      "duration": 4.5,
+      "peak_db": -1.7,
+      "content_hash": "4566d86012c1010bbd6c7edc0b09a772eefc1b6b491dee29c3407ecf71c49458",
+      "source_ids": [
+        "179122959"
+      ],
+      "playback_gain_db": 7.7
+    },
+    "event-52e19eba110d4f98": {
+      "id": "event-52e19eba110d4f98",
+      "name": "msg_ListEntryClick_play",
+      "file": "res://assets/audio/ui/clips/event-52e19eba110d4f98.wav",
+      "duration": 0.16558,
+      "peak_db": -14.19,
+      "content_hash": "e5bef0083ebc57459d6fef54fd6f20730e0449138459ab3c09c71f79ecec930b",
+      "source_ids": [
+        "318442168"
+      ],
+      "playback_gain_db": 20.19
+    },
+    "event-6ebb8728afcd0b33": {
+      "id": "event-6ebb8728afcd0b33",
+      "name": "msg_StartDragItem_play {d}",
+      "file": "res://assets/audio/ui/clips/event-6ebb8728afcd0b33.wav",
+      "duration": 0.16733,
+      "peak_db": -7.74,
+      "content_hash": "4ee52aa8b78e0a2a531ec9557672395c03a827711711381c25d7cb22e67e9a37",
+      "source_ids": [
+        "81776838"
+      ],
+      "playback_gain_db": 13.74
+    },
+    "event-19e92fc32275ed50": {
+      "id": "event-19e92fc32275ed50",
+      "name": "ui_radial_select_play",
+      "file": "res://assets/audio/ui/clips/event-19e92fc32275ed50.wav",
+      "duration": 0.42467,
+      "peak_db": -1.12,
+      "content_hash": "8938907d058dca6d5ccd403e973f11de2602484d933983c8bdd3839ab4ff7b2e",
+      "source_ids": [
+        "482736015"
+      ],
+      "playback_gain_db": 7.12
+    },
+    "event-57590f00bf6c6965": {
+      "id": "event-57590f00bf6c6965",
+      "name": "ui_scanner_anomaly",
+      "file": "res://assets/audio/ui/clips/event-57590f00bf6c6965.wav",
+      "duration": 0.39881,
+      "peak_db": -12.97,
+      "content_hash": "716dd982f7226597df472fbfeeff0508e7721836930de5fd2690ba17cebb74f8",
+      "source_ids": [
+        "252790543"
+      ],
+      "playback_gain_db": 18.97
+    },
+    "event-378d90f881900bfa": {
+      "id": "event-378d90f881900bfa",
+      "name": "msg_NoFittingLocations_play {d}",
+      "file": "res://assets/audio/ui/clips/event-378d90f881900bfa.wav",
+      "duration": 0.18458,
+      "peak_db": -0.03,
+      "content_hash": "42ec6742ce02ad32b550c3080f863eaf0f6105ade748ecb37391628d2930a355",
+      "source_ids": [
+        "832443169"
+      ],
+      "playback_gain_db": 6.03
+    },
+    "event-618e9fbb32b61df7": {
+      "id": "event-618e9fbb32b61df7",
+      "name": "ui_notify_positive_03_play",
+      "file": "res://assets/audio/ui/clips/event-618e9fbb32b61df7.wav",
+      "duration": 1.307,
+      "peak_db": -1.47,
+      "content_hash": "0ca97b8a6cfb43579d54c18dcd354ede6195bee6a4bbf3a3ed7742a78184d070",
+      "source_ids": [
+        "241431809"
+      ],
+      "playback_gain_db": 7.47
+    },
+    "event-282862d0148277a4": {
+      "id": "event-282862d0148277a4",
+      "name": "msg_ProgressStart_play",
+      "file": "res://assets/audio/ui/clips/event-282862d0148277a4.wav",
+      "duration": 0.344,
+      "peak_db": -9.32,
+      "content_hash": "27be75abbc5e325c3b66da5e853f541fd0faa539b3acc919fae034c060f4a02e",
+      "source_ids": [
+        "1002931759"
+      ],
+      "playback_gain_db": 15.32
+    },
+    "event-d3e5f1dfd7efc280": {
+      "id": "event-d3e5f1dfd7efc280",
+      "name": "msg_pi_spaceports_countdown_play {d}",
+      "file": "res://assets/audio/ui/clips/event-d3e5f1dfd7efc280.wav",
+      "duration": 0.12985,
+      "peak_db": -3.41,
+      "content_hash": "9858e75a854abcc8b1c5d88c44e11f1536585f1556baa1cf918b96e40227e397",
+      "source_ids": [
+        "1042978193"
+      ],
+      "playback_gain_db": 9.41
+    },
+    "event-9b4be14507c716d7": {
+      "id": "event-9b4be14507c716d7",
+      "name": "crimewatch_weapons_timer_play",
+      "file": "res://assets/audio/ui/clips/event-9b4be14507c716d7.wav",
+      "duration": 1.0,
+      "peak_db": -12.2,
+      "content_hash": "2178a45a4ab9f390deabd80be30dc56f740141cce6fe35ede04e794e267f618d",
+      "source_ids": [
+        "410852224"
+      ],
+      "playback_gain_db": 18.2
+    },
+    "event-3228f36977dc8978": {
+      "id": "event-3228f36977dc8978",
+      "name": "ui_pvp_arena_opponent_matched_play",
+      "file": "res://assets/audio/ui/clips/event-3228f36977dc8978.wav",
+      "duration": 9.0,
+      "peak_db": -6.02,
+      "content_hash": "61e13b9a248db68f55ac05d60cb0e6bd267a1d4101dab4d1c2e92cf7b30adffd",
+      "source_ids": [
+        "677108342"
+      ],
+      "playback_gain_db": 12.02
+    },
+    "media-917091091": {
+      "id": "media-917091091",
+      "name": "docking_overlay_end1.wav",
+      "file": "res://assets/audio/ui/clips/media-917091091.ogg",
+      "duration": 5.0,
+      "peak_db": -13.42,
+      "content_hash": "23c7fa6845b6bd14d57df8d19b90fe93d1673069eb6aa0167b73310f166d68f5",
+      "source_ids": [
+        "917091091"
+      ],
+      "playback_gain_db": 19.42
+    },
+    "event-9af050fee7c4bb00": {
+      "id": "event-9af050fee7c4bb00",
+      "name": "ess_ui_failure_play",
+      "file": "res://assets/audio/ui/clips/event-9af050fee7c4bb00.ogg",
+      "duration": 3.06396,
+      "peak_db": -0.94,
+      "content_hash": "15664b03e0376c0d049286716648837eb5c14e5ba816547f74e98fa7037a9836",
+      "source_ids": [
+        "1042920449"
+      ],
+      "playback_gain_db": 6.94
+    },
+    "event-b8d3533b1b4537a8": {
+      "id": "event-b8d3533b1b4537a8",
+      "name": "ui_warning_armor",
+      "file": "res://assets/audio/ui/clips/event-b8d3533b1b4537a8.wav",
+      "duration": 0.295,
+      "peak_db": -2.81,
+      "content_hash": "dd3d876b7e14ad78eb01f823057da4034344288e1b9026f16718f4ad92223b1a",
+      "source_ids": [
+        "841643240"
+      ],
+      "playback_gain_db": 8.81
+    },
+    "event-4d7dcaf29c5d0e1b": {
+      "id": "event-4d7dcaf29c5d0e1b",
+      "name": "res_wars_mission_success_play",
+      "file": "res://assets/audio/ui/clips/event-4d7dcaf29c5d0e1b.wav",
+      "duration": 5.25,
+      "peak_db": -9.29,
+      "content_hash": "c7f6e2f7791025590d5e0250a562179366fdbbdbc5f4d63c7adf3d551a664f52",
+      "source_ids": [
+        "320415264"
+      ],
+      "playback_gain_db": 15.29
+    },
+    "event-04e91a2a3604f0de": {
+      "id": "event-04e91a2a3604f0de",
+      "name": "raffle_lose_play",
+      "file": "res://assets/audio/ui/clips/event-04e91a2a3604f0de.wav",
+      "duration": 6.48,
+      "peak_db": -5.96,
+      "content_hash": "7d46273569933a91390079b9a62765fd905b9245f9fbdc13b53d5b80ea84192c",
+      "source_ids": [
+        "869831390"
+      ],
+      "playback_gain_db": 11.96
+    }
+  }
+}

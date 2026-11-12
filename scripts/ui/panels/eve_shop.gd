@@ -439,6 +439,9 @@ func set_offers(offers: Array) -> void:
 		var idx := _cards_row.get_child_count()
 		var root: PanelContainer = c["root"]
 		root.gui_input.connect(_on_card_input.bind(idx))
+		root.mouse_entered.connect(func():
+			if _buy_enabled and idx < _offers.size() and _offers[idx] is Dictionary and not (_offers[idx] as Dictionary).is_empty():
+				EveUiAudio.play("ui.hover"))
 		_cards_row.add_child(root)
 		_card_widgets.append(c)
 

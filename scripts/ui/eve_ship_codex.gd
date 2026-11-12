@@ -85,6 +85,8 @@ func _ready() -> void:
 
 ## 打开图鉴（懒建）。
 func open() -> void:
+	if not visible:
+		EveUiAudio.play("window.detail")
 	_sync_size()
 	if not _built:
 		_build()
@@ -121,6 +123,8 @@ func _process(_dt: float) -> void:
 
 
 func close() -> void:
+	if visible:
+		EveUiAudio.play("window.close")
 	visible = false
 
 
@@ -346,6 +350,9 @@ func _make_card(s: Dictionary) -> PanelContainer:
 		if ev is InputEventMouseButton and ev.pressed \
 				and ev.button_index == MOUSE_BUTTON_LEFT:
 			_select(key))
+	p.gui_input.connect(func(ev: InputEvent):
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			EveUiAudio.play("fleet.select"))
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 2)
@@ -488,6 +495,7 @@ func _chip_row(row: HBoxContainer, names: Array, cb: Callable, w: int = 78) -> A
 	for i in names.size():
 		var b := Button.new()
 		b.text = String(names[i])
+		b.set_meta("ui_audio_slot", "ui.tab")
 		b.toggle_mode = true
 		b.custom_minimum_size = Vector2(w, 28)
 		b.add_theme_font_size_override("font_size", FONT.s(12))

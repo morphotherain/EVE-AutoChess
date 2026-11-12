@@ -256,12 +256,6 @@ var _result_payload: Dictionary:
 ## 买到新船 / 三连合成 / 拖放调位都会变 —— 变了就得把舰队重新造一遍，
 ## 否则玩家花了钱或挪了位，战场上却不出现对应的变化。
 var _last_field_sig := ""
-## ★ 2026-10-30：战斗播报用「本艘船上一次看到的护盾/装甲是否还在」。
-## 键 = ship.id，值 = {"shield": bool, "armor": bool}。
-## ⚠️ `shot_fired` 不带「打在盾上还是甲上」的信息（见 `_hit_layer` 的说明），
-##    所以「破盾 / 破甲」只能靠**状态由有变无**那一发给出来 —— 这是唯一
-##    不需要改模拟器信号签名的做法。每回合舰队重建时清空（id 会换）。
-var _layer_seen: Dictionary = {}
 ## 只有名单（不含格号）的指纹 —— 决定要不要打那一行「上场 n／m 艘」日志
 var _last_roster_sig := ""
 ## 上一次打过的「生效羁绊」组合 —— 只在变化时打日志
@@ -441,6 +435,7 @@ func _ready() -> void:
 	layer.add_child(hud)
 	# 真实数据已经接上，演示内容一律关掉（HUD 侧默认已是 false，这里再钉一次）
 	hud.demo_content = false
+	arena.attack_presented.connect(_on_attack_presented)
 
 	# ── 设置窗桥接器接线（阶段一：arena/hud/audio 已就绪）──
 	# ⚠️ `run` 建得更晚（只有「加币」用它）⇒ 阶段二 `bind_run()`。
@@ -519,11 +514,15 @@ func _ready() -> void:
 	run = RUN_STATE_SCRIPT.new()
 	run.name = "RunState"
 	add_child(run)
+	run.feedback_requested.connect(_on_run_audio_feedback)
 	run.log_event.connect(_on_run_log)
 	run.offers_changed.connect(_on_offers_changed)
 	run.changed.connect(_refresh_run_ui)
 	run.phase_changed.connect(_on_phase_changed)
 	run.run_ended.connect(_resolve_phase.on_run_ended)
+	run.run_ended.connect(func(cleared: bool):
+		if versus == null:
+			EveUiAudio.play("run.victory" if cleared else "run.defeat"))
 
 	# ★ 结算/结局阶段模块接线（此时 run / hud / audio / arena 都在）。
 	_resolve_phase.setup(run, hud, audio, arena, _get_sim, begin_prep, restart_run,
@@ -532,7 +531,7 @@ func _ready() -> void:
 	# ★ 战斗阶段模块接线（它的 `start()` 负责建模拟器，并把三条 sim 信号接到该接的地方）。
 	_battle_phase.setup(run, hud, audio, arena, _resolve_phase, _get_sim,
 			_get_own_ships, _get_enemy_ships, _get_own_field_index,
-			_on_unit_destroyed, _on_shot_fired)
+			_on_unit_destroyed)
 	# [versus] 多人结算挂在 battle_over 上，**不是** sim.battle_finished。
 	#  ⚠️ 三条收束路径里只有「模拟器打完」那条有 sim 信号；
 	#     「未布阵判负」「时限判负」是直接调 finished() 的 ⇒ 挂 sim 会漏。
@@ -784,9 +783,6 @@ func begin_prep() -> void:
 		return
 
 	_busy = true
-	# ★ 2026-10-30：新一回合的舰船 id 会重排 ⇒ 上一回合的「盾/甲是否还在」作废。
-	#   不清的话，新船 id 若撞上旧 id，第一发就会被误判成「破盾」。
-	_layer_seen.clear()
 	run.set_phase(EveRunState.Phase.PREP)
 	hud.set_phase(0)
 	hud.set_selling(false)
@@ -1292,6 +1288,7 @@ func start_battle() -> void:
 	var s := _battle_phase.start()
 	if s != null:
 		sim = s
+		sim.missile_launched.connect(_on_missile_launched)
 
 
 #  阶段三：结算
@@ -1400,6 +1397,12 @@ func _process(delta: float) -> void:
 	#      而那一刻 `run.field` 是空的 ⇒ 直接被判「未部署」。
 	if _novice_ask != null and _novice_ask.is_open():
 		return
+	if arena != null and arena.battle_fx != null:
+		arena.battle_fx.set_timing(_paused, time_scale)
+		if not _paused:
+			arena.advance_hit_feedback(delta*time_scale)
+	if hud != null and hud.damage_feed != null:
+		hud.damage_feed.set_timing(_paused,time_scale)
 	# [versus] round clock runs in every phase (prep time counts too)
 	_versus_tick(delta)
 	_versus_net_tick()
@@ -1486,6 +1489,13 @@ var _timeout_forfeit: bool:
 
 
 
+
+
+func _on_run_audio_feedback(slot_id: String) -> void:
+	# PvP HP belongs to MatchState; the run's beacon is not the player's life.
+	if versus != null and slot_id == "round.damage":
+		return
+	EveUiAudio.play(slot_id)
 
 
 func _on_run_log(text: String, category: StringName) -> void:
@@ -1772,6 +1782,7 @@ func _on_shop_preview(index: int) -> void:
 	var preview: EveShip = _fleet.build_preview(offer)
 	if preview != null:
 		hud.show_ship(preview)
+		EveUiAudio.play("shop.select")
 
 
 func _on_shop_refresh() -> void:
@@ -1933,7 +1944,6 @@ func restart_run() -> void:
 	#   可能带着 `_pending_event` 进第一个事件节点（状态串味）。
 	_pending_event = &""
 	_ship_pick_cache.clear()
-	_layer_seen.clear()
 	# ★ 2026-10-10（审查 2#2）：重开 = 上一局作废 ⇒ 先把旧档删掉
 	#   （随后 `begin_prep()` 会把**新的一局**存进去，所以「继续上一局」照样有）。
 	RUN_STORE.clear()
@@ -2018,7 +2028,7 @@ func _on_unit_destroyed(ship: EveShip) -> void:
 	#
 	# ── 阶段 D②：击毁反馈 ──
 	# 爆炸挂在那艘船【当时的位置】上。ship.body.position 是米。
-	arena.fx_boom(ship.body.position)
+	arena.fx_destroy_ship(ship)
 	# 阶段 D④：击毁爆炸音。放在视觉之后 —— 先看见再听见，
 	# 顺序反了会觉得「声音提前了」（虽然间隔只有一帧）。
 	# ⚠️ 一样要先喂模拟器时间，否则快进时被节流吞掉。
@@ -2029,128 +2039,27 @@ func _on_unit_destroyed(ship: EveShip) -> void:
 		"time": sim.elapsed if sim != null else 0.0, "category": &"damage",
 		"text": "%s 结构崩溃 · 爆炸解体" % ship.ship_name,
 	})
-	# ⚠️ 视觉节点此刻起不可见（sync_from_body 见到 alive=false 会隐藏它）。
-	#    Label3D 不带 no_depth_test 的话会跟着一起消失，这里不做额外处理 ——
-	#    船没了就是没了，留一个浮空的名字反而像 bug。
+	# Business death and labels remain immediate. Battle FX owns a detached hull
+	# snapshot through the short secondary explosions and thermal breakup.
 
 
-## 判定这一发打在**哪一层**（护盾 / 装甲 / 结构）。
-##
-## ⚠️ 这是**近似**，不是模拟器的原始层信息：
-##    `shot_fired` 只带 `quality`，不带「打在盾上还是甲上」。
-##    这里用**命中后剩余的 hp** 反推：
-##      · 盾还有   ⇒ 盾在扛（shield）
-##      · 盾空了、甲还有 ⇒ 装甲（armor）
-##      · 都空了   ⇒ 结构（hull）
-##    唯一不准的时刻是「一发刚好把盾打穿」—— 那一发会被判成 armor。
-##    代价只是**一次闪光的颜色**，可接受；要做到严格正确得让 sim 把层信息
-##    一起播出来（那是改信号签名，要同步验收，另排期）。
-##
-## ⛔ 不要用 `quality` 来猜层：品质 ≠ 层。一发 WRECKING 可能砸在满盾上，
-##    一发普通命中可能已经在啃结构 —— 那正是「颜色读不出状态」的老毛病。
-func _hit_layer(ship: EveShip) -> StringName:
-	if ship == null:
-		return &""
-	if float(ship.hp.get(&"shield", 0.0)) > 0.001:
-		return &"shield"
-	if float(ship.hp.get(&"armor", 0.0)) > 0.001:
-		return &"armor"
-	return &"hull"
+func _on_missile_launched(_event: Dictionary) -> void:
+	# Each visible rack release, ignition and contact owns its selected sound.
+	pass
 
 
-## 这一发在**播报条**上算什么事件：命中 / 穿透 / 破盾 / 破甲 / 击毁。
-##
-## ⚠️ 优先级是**有顺序**的，别调换：
-##   ① 击毁（结构见底）最重 —— 它同时意味着前面几层已经没了，报「破甲」是误导；
-##   ② 破层（盾/甲 由有变无）—— 只在这一发**跨过归零**时成立，
-##      否则盾空之后的每一发都会被标成「破盾」，播报条就全是破盾；
-##   ③ 穿透（`EveShip.last_hit_pierced`，由模拟器每发写入）；
-##   ④ 落回「命中」。
-func _feed_kind(target: EveShip) -> StringName:
-	if target == null:
-		return &"hit"
-	var id := target.id
-	var prev: Dictionary = _layer_seen.get(id, {"shield": true, "armor": true})
-	var has_shield := float(target.hp.get(&"shield", 0.0)) > 0.001
-	var has_armor := float(target.hp.get(&"armor", 0.0)) > 0.001
-	var has_hull := float(target.hp.get(&"hull", 0.0)) > 0.001
-	_layer_seen[id] = {"shield": has_shield, "armor": has_armor}
-	if not has_hull:
-		return &"kill"
-	if bool(prev.get("shield", true)) and not has_shield:
-		return &"shield"
-	if bool(prev.get("armor", true)) and not has_armor:
-		return &"armor"
-	if target.last_hit_pierced:
-		return &"pierce"
-	return &"hit"
-
-
-## 开火：画曳光 + 冒伤害数字（阶段 D②③）
-##
-## ⚠️ 这个回调在 **sim.step() 的一次调用里可能被触发上百次**
-##    （固定步长的 tick 循环）。所以它里面【绝不能】做重活 ——
-##    一切只是 add_child 一个 quad / 往数组里压一条记录。
-##    verify_run 的 `debug_fast_forward_battle` 一次快进 90 秒，
-##    就是靠这条约束才不会卡死。
-func _on_shot_fired(attacker: EveShip, target: EveShip, hit: bool,
-		quality: int, damage: float) -> void:
-	if attacker == null or target == null:
+func _on_attack_presented(event: Dictionary) -> void:
+	# One resolved event drives material response, sound, bar loss and one number.
+	audio.set_clock(float(event.get("time",0.0)))
+	if not event.hit:
 		return
-	# ★ 2026-10-21 火力引导：先把受击层算出来，好让曳光线指向「壳面」而不是船体中心。
-	#   护盾还在时，视觉命中点取目标护盾朝向攻击者的那一面；
-	#   否则仍用船体位置。
-	var layer := _hit_layer(target)
-	# ★ 2026-10-30：战斗播报（屏幕中央靠上 3 行）。**只播命中** ——
-	#   miss 每秒几十次，播了就是把真正要读的结论冲掉。
-	#   ⚠️ 这里只做「往数组里压一条」，与飘字同一条约束（见本函数顶注）。
-	if hit:
-		hud.push_damage_line(int(round(damage)), attacker.team == 0,
-				_feed_kind(target), target.ship_name)
-	var vis := arena.get_ship_visual(target.id)
-	var aim: Vector3 = target.body.position
-	if hit and layer == &"shield" and vis != null and vis.has_method("shield_impact_point"):
-		aim = vis.shield_impact_point(attacker.body.position)
-	if hit and layer == &"shield":
-		# 护盾层：画炮击亮痕（攻击本身），头部停在壳面锚点上
-		arena.fx_artillery(attacker.body.position, aim, quality)
-	else:
-		arena.fx_tracer(attacker.body.position, aim, hit, quality)
-	# 阶段 D④：开火 + 命中音。
-	#
-	# ⚠️ 这两行的调用频率极高（一次 sim.step 里可能上百次），
-	#    但 `play_fire` / `play_hit` 内部**第一件事就是查节流表**，
-	#    被吞掉时只加一个计数器就返回 —— 不做任何采样加载或节点操作。
-	#    所以这里的成本是「一次字典查表」，不会拖慢快进。
-	#
-	# ⚠️ 先把**模拟器时间**喂给音频层（见 EveAudio.set_clock）：
-	#    节流必须按战斗时间来，否则快进 / 倍速时一整场只响一两声。
-	if sim != null:
-		audio.set_clock(float(sim.elapsed))
-	audio.play_fire(quality)
-	if not hit:
-		# 未命中也有信息量（「打空了」），但不画爆点、不冒数字 ——
-		# 一次齐射里 60% 是未命中，全冒出来会糊满整个屏幕。
-		# 声音侧同理：未命中只响开火音，**不**响命中音 ——
-		# ⚠️ 早期版本这里误调了 `play_hit(quality)`：品质 0 会去查 "miss" 音源，
-		#    查不到就退回通用 "hit"，于是「打空了」反而播出一声命中 ——
-		#    而且不报错。
-		return
-	audio.play_hit(quality)
-	# ★ 视觉分层：护盾层不再画面积特效（蓝环已删），只留贴花；
-	#   装甲/结构层仍走原来的爆点。
-	arena.fx_hit(aim, quality, layer)
-	if vis != null and vis.has_method("flash_hit"):
-		vis.flash_hit(layer)
-	# ★ 护盾层受击：在目标船的蛋形护盾上落一块曲面贴花。
-	#   护盾本身不显形，只有贴花出现；来向取攻击者位置，
-	#   所以贴花落在「面向敌人」的那一侧。
-	#   ⚠️ 贴花的槽位上限由单个贴花的覆盖率推导（见 eve_shield_impact.gd），
-	#      落进已有贴花角度范围内会复用那个槽位，不会无限堆节点。
-	if layer == &"shield" and vis != null and vis.has_method("shield_hit_from"):
-		vis.shield_hit_from(attacker.body.position)
-	var sp := arena.world_to_screen(target.body.position + Vector3(0, 4, 0))
-	hud.pop_damage(sp, damage, quality, true)
+	var breaks:Array=event.get("breaks",[])
+	if not breaks.has(&"hull"):
+		for layer in [&"shield",&"armor"]:
+			if breaks.has(layer): audio.play_layer_break(layer)
+	var kind:StringName=hud.damage_feed.event_kind(event)
+	hud.push_damage_line(int(round(event.damage)),int(event.get("source_team",0))==0,kind,event.get("target_name",""))
+	hud.pop_damage(event.get("screen_position",Vector2.ZERO),event.damage,event.quality,true,event)
 
 
 func _on_range_rings_toggled(enabled: bool) -> void:
@@ -2371,11 +2280,13 @@ func _try_select_at(screen_pos: Vector2) -> void:
 			var preview: EveShip = _fleet.build_preview(bench[bi])
 			if preview != null:
 				hud.show_ship(preview)
+				EveUiAudio.play("fleet.select")
 			return
 	# ── ② 3D 战场 ───────────────────────────────────────────────────
 	var best := _pick_ship_at(screen_pos)
 	if best != null:
 		hud.show_ship(best)
+		EveUiAudio.play("fleet.select")
 
 
 ## 双击：视角中心选择（2026-10-27 用户定案）
@@ -3087,6 +2998,8 @@ func _versus_finish() -> void:
 		if bool(a["alive"]) != bool(b["alive"]):
 			return bool(a["alive"])
 		return int(a["hp"]) > int(b["hp"]))
+	if not rows.is_empty():
+		EveUiAudio.play("run.defeat" if bool(rows[0]["is_ai"]) else "run.victory")
 	var line := ""
 	for i in rows.size():
 		var rr = rows[i]
@@ -3158,6 +3071,10 @@ func _refresh_versus_hud() -> void:
 func _versus_settle(winner_team: int, own_alive: int = -1, foe_alive: int = -1) -> void:
 	if versus == null:
 		return
+	var human_hp_before := 0
+	for participant in versus.players:
+		if participant != null and not participant.is_ai:
+			human_hp_before = participant.hp
 	if own_alive < 0 or foe_alive < 0:
 		own_alive = 0
 		foe_alive = 0
@@ -3205,6 +3122,9 @@ func _versus_settle(winner_team: int, own_alive: int = -1, foe_alive: int = -1) 
 			"a": me2, "b": -1, "a_won": (winner_team == 0),
 			"a_alive": own_alive, "b_alive": foe_alive })
 	# ★★ 2026-10-27 用户定案：结算页不推进，**推进由回合倒计时决定**。
+	for participant in versus.players:
+		if participant != null and not participant.is_ai and participant.hp < human_hp_before:
+			EveUiAudio.play("round.damage")
 	#  「如果它打完，倒计时也结束了，那就到下一回合，没时间让他选打捞」
 	#  ⇒ 这里只登记「本回合已打完」，真正的 _next_round 在
 	#     _versus_advance_round()（倒计时归零 / 或时钟已耗尽时立刻）里做。

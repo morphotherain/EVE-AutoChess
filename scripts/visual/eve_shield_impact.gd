@@ -266,7 +266,8 @@ func _build_anchors() -> void:
 		mat.set_shader_parameter("color_core", decal_core_color)
 		mi.material_override = mat
 		add_child(mi)
-		_slots.append({"dir": dir, "node": mi, "mat": mat, "t": lifetime})
+		_slots.append({"dir": dir, "node": mi, "mat": mat, "t": lifetime,
+			"vertices":mi.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]})
 		if debug_markers:
 			_spawn_marker(dir, i)
 
@@ -279,10 +280,58 @@ func fire(local_pos: Vector3) -> void:
 		rejected += 1
 		return
 	var best = snapped["slot"]
+	_activate_slot(best)
+
+
+func fire_slot(index:int) -> void:
+	if index<0 or index>=_slots.size(): return
+	total_hits+=1
+	_activate_slot(_slots[index])
+
+
+func _activate_slot(best:Dictionary) -> void:
 	if best.t < lifetime:
 		snap_reuse += 1
 	best.t = 0.0
 	best.node.visible = true
+	best["collapse_age"]=-1.0
+	best.mat.set_shader_parameter("frame",0)
+	best.mat.set_shader_parameter("intensity",75.0)
+
+
+func nearest_slot(local_pos:Vector3) -> int:
+	var relative:=local_pos-position
+	if relative.length_squared()<1e-10 or _slots.is_empty(): return -1
+	var incoming:Vector3=(relative/axes).normalized()
+	var chosen:=0
+	for i in range(1,_slots.size()):
+		if _slots[i].dir.dot(incoming)>_slots[chosen].dir.dot(incoming): chosen=i
+	return chosen
+
+
+func point_on_slot(index:int,spread:Vector2=Vector2.ZERO) -> Vector3:
+	# Interpolate the actual prebuilt triangle, not an estimated ellipsoid.
+	# The main contact is the exact center vertex; secondary warheads may land
+	# at different UVs within the same visible curved patch.
+	var grid:Vector2=(spread.limit_length(0.85)*0.42+Vector2.ONE)*0.5*PATCH_SEGMENTS
+	var x:=clampi(int(floor(grid.x)),0,PATCH_SEGMENTS-1)
+	var y:=clampi(int(floor(grid.y)),0,PATCH_SEGMENTS-1)
+	var u:=grid.x-float(x)
+	var v:=grid.y-float(y)
+	var vertices:PackedVector3Array=_slots[index].vertices
+	var a:Vector3=vertices[y*(PATCH_SEGMENTS+1)+x]
+	var b:Vector3=vertices[y*(PATCH_SEGMENTS+1)+x+1]
+	var c:Vector3=vertices[(y+1)*(PATCH_SEGMENTS+1)+x+1]
+	var d:Vector3=vertices[(y+1)*(PATCH_SEGMENTS+1)+x]
+	return position+(a*(1.0-u)+b*(u-v)+c*v if u>=v else a*(1.0-v)+c*u+d*(v-u))
+
+
+func collapse() -> void:
+	# A broken shield releases only its already visible patches. No new sphere,
+	# ring or blue blast is created around the ship.
+	for slot in _slots:
+		if slot.node.visible:
+			slot["collapse_age"]=0.0
 
 ## 找最近锚点；若最近的也超出 SNAP_MAX_ANGLE_DEG，返回空字典。
 ## 每发只做 anchor_count 次点积 + 一次 acos，没有网格生成。
@@ -387,10 +436,21 @@ func _spawn_marker(dir: Vector3, idx: int) -> void:
 	_marker_root.add_child(mi)
 
 func _process(delta: float) -> void:
+	advance(delta)
+
+
+func advance(delta: float) -> void:
 	for s in _slots:
 		if not s.node.visible:
 			continue
 		s.t += delta
+		var collapse_age:float=s.get("collapse_age",-1.0)
+		if collapse_age>=0.0:
+			collapse_age+=delta
+			s.collapse_age=collapse_age
+			if collapse_age>=0.28:
+				s.node.visible=false
+				continue
 		var k: float = s.t / lifetime
 		if k >= 1.0:
 			s.node.visible = false
@@ -401,4 +461,5 @@ func _process(delta: float) -> void:
 			env = lerpf(1.25, 1.0, k / 0.12)
 		else:
 			env = pow(1.0 - (k - 0.12) / 0.88, 1.6)
-		s.mat.set_shader_parameter("intensity", 60.0 * clampf(env, 0.0, 1.4))
+		var release:float=1.0-smoothstep(0.04,0.28,collapse_age) if collapse_age>=0.0 else 1.0
+		s.mat.set_shader_parameter("intensity", 60.0 * clampf(env, 0.0, 1.4)*release)

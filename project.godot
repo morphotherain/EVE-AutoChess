@@ -20,6 +20,7 @@ config/icon="res://icon.png"
 [autoload]
 
 EveBoot="*res://scripts/core/eve_boot.gd"
+EveUiAudio="*res://scripts/core/eve_ui_audio.gd"
 EveAiBridge="*res://scripts/core/eve_ai_bridge.gd"
 EveUpdater="*res://scripts/core/eve_updater.gd"
 

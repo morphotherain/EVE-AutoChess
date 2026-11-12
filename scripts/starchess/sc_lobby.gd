@@ -194,6 +194,7 @@ func _on_pick(idx: int) -> void:
 	if idx < 0 or idx >= _commander_ids.size():
 		return
 	_picked[_my_index] = idx
+	EveUiAudio.play("commander.select")
 	var c: Dictionary = _commander_ids[idx]
 	if _center_name != null:
 		_center_name.text = str(c.get("name", ""))
@@ -245,4 +246,5 @@ func _enter_battle() -> void:
 		_picked[_my_index] = 0
 	CONTEXT.commander_index = int(_picked[_my_index])
 	CONTEXT.player_picks = _picked.duplicate()
+	EveUiAudio.play("menu.start")
 	get_tree().change_scene_to_file("res://scenes/starchess/sc_battle.tscn")

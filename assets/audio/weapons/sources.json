@@ -1,0 +1,740 @@
+{
+  "schema": "eve-weapon-audio-bank/v1",
+  "charges": {
+    "laser.medium": {
+      "file": "res://assets/audio/weapons/laser_medium_charge.wav",
+      "duration": 1.15
+    }
+  },
+  "cannon_mounts": {
+    "small": 2,
+    "medium": 3,
+    "large": 4,
+    "mount_stagger_seconds": 0.075
+  },
+  "playback": "Firing WAVs begin at visual emission; charge cues use existing weapon cooldown. Original pitch and battle rules retained.",
+  "files": [
+    {
+      "file": "hybrid_large_01.wav",
+      "slot": "hybrid.large",
+      "name": "轨道磁轨炮 · 完整射击 · 短尾音",
+      "sound_id": "0b5209658a49007e9fdceab1",
+      "duration": 2.08,
+      "pitch_ratio": 1.0,
+      "sha256": "8c58b80218946f72364f6c9dd2ded21c1003dd68e5af98ed8e94056814e40323"
+    },
+    {
+      "file": "hybrid_medium_01.wav",
+      "slot": "hybrid.medium",
+      "name": "磁轨炮 Railgun · 完整射击 · 无蓄能 · 短尾音",
+      "sound_id": "edd3e9841783dd5e6dcee62e",
+      "duration": 1.63,
+      "pitch_ratio": 1.0,
+      "sha256": "4ffdd46d61a32b98aad93a90832e1610b694b9967ab7ea24443c59d203490787"
+    },
+    {
+      "file": "hybrid_small_01.wav",
+      "slot": "hybrid.small",
+      "name": "Recoilless 无后坐力炮 · 完整射击 · 短尾音",
+      "sound_id": "998e4011ecb3329d8f3212ae",
+      "duration": 1.38,
+      "pitch_ratio": 1.0,
+      "sha256": "cf67edbcdace6cc9b0ceac20904c03ef5e6c257d2e48b7da11cd5a28e24107fa"
+    },
+    {
+      "file": "laser_large_01.wav",
+      "slot": "laser.large",
+      "name": "脉冲激光炮 / laser_pulse_cannon · 完整射击 · 短尾音",
+      "sound_id": "5cd0261db1389f97fcd9bea0",
+      "duration": 1.93,
+      "pitch_ratio": 1.0,
+      "sha256": "4844cc01d8f676518c9aa0028e0648929abf7675dabc0303f010e5db34454bb9"
+    },
+    {
+      "file": "laser_medium_01.wav",
+      "slot": "laser.medium",
+      "name": "Purifier 等离子武器 · 完整射击 · 短尾音",
+      "sound_id": "9199eff0cd1707427e26e49f",
+      "duration": 1.43,
+      "pitch_ratio": 1.0,
+      "sha256": "9f388600a9ca25bf78e5ef9fa0c7b771997f519ae8967118a264a5938e7eeda4"
+    },
+    {
+      "file": "laser_small_01.wav",
+      "slot": "laser.small",
+      "name": "Sickle 激光武器 · 完整射击 · 短尾音",
+      "sound_id": "046d2b15f16125e39ccaab31",
+      "duration": 0.98,
+      "pitch_ratio": 1.0,
+      "sha256": "6db2c0c90357336ed62898f756b26cb101472bb212c872f44d46bd95aee609fc"
+    },
+    {
+      "file": "missile_flight_large_01.wav",
+      "source": "missile_flight_loop.wav",
+      "size": "large",
+      "pitch_ratio": 1.0,
+      "gain_db": 0.0,
+      "duration": 2.0,
+      "original_unchanged": true,
+      "layer_sources": [
+        "missile_flight_loop.wav"
+      ],
+      "sha256": "1fca6a595ba82a7b3a25a79e8ca177634d4bdc1bac915b4ba8766546d9cf5b4e"
+    },
+    {
+      "file": "missile_flight_medium_01.wav",
+      "source": "missile_flight_loop.wav",
+      "size": "medium",
+      "pitch_ratio": 1.0,
+      "gain_db": -2.0,
+      "duration": 2.0,
+      "original_unchanged": false,
+      "layer_sources": [
+        "missile_flight_loop.wav"
+      ],
+      "sha256": "f6c3da5740702c6485673aeeec5fda7580f94a974350bfbcf63d09b322c7e7f7"
+    },
+    {
+      "file": "missile_flight_small_01.wav",
+      "source": "missile_flight_loop.wav",
+      "size": "small",
+      "pitch_ratio": 1.0,
+      "gain_db": -4.0,
+      "duration": 2.0,
+      "original_unchanged": false,
+      "layer_sources": [
+        "missile_flight_loop.wav"
+      ],
+      "sha256": "71eff6f1ca4655d5e9e78fbb4fd565f7e3d7aab144d70e7a02d60f7d23fe712d"
+    },
+    {
+      "file": "missile_hit_large_01.wav",
+      "duration": 0.86,
+      "sha256": "fc649116ee041fd3deeab6e607031c026347a0899a8b3cf901dd44038efe4337",
+      "name": "大档导弹 · 独立命中爆炸 · 变体1",
+      "source": {
+        "bank": "weapons_superearth",
+        "event": 2225190964,
+        "variant": 1,
+        "recipe": "weapons_superearth-2728-event {r} {!}.txtp",
+        "layers": [
+          {
+            "media_id": "857722295",
+            "start": 0.4,
+            "gain_db": -6.0,
+            "rate": 1
+          },
+          {
+            "media_id": "74089415",
+            "start": 0,
+            "gain_db": -5.300000011920929,
+            "rate": 1
+          },
+          {
+            "media_id": "174959513",
+            "start": 2.0,
+            "gain_db": -8.400000005960464,
+            "rate": 1
+          },
+          {
+            "media_id": "962060451",
+            "start": 2.7,
+            "gain_db": -4.5,
+            "rate": 1
+          }
+        ],
+        "missing_plugins": [
+          "?.plugin-00830402 #i",
+          "?.plugin-00830402 #i",
+          "?.plugin-00830402 #i",
+          "?.plugin-00830402 #i",
+          "?.plugin-00830402 #i"
+        ],
+        "name": "大档导弹 · 独立命中爆炸 · 变体1",
+        "phase": "命中",
+        "event_name": "exp_hellbomb",
+        "processing": {
+          "release_seconds": 0.86,
+          "tail_fade_seconds": 0.27,
+          "note": "重型仅保留爆炸前段与0.4秒压力波，裁掉2秒以后的远处回响。"
+        }
+      },
+      "runtime_gain_db": -10.0,
+      "pitch_ratio": 1.0
+    },
+    {
+      "file": "missile_hit_large_02.wav",
+      "duration": 0.86,
+      "sha256": "c55966cd1ce3e4c4cff9eb4018c997d888d8ebaa18cad83bc9c7e2490ec1e61b",
+      "name": "大档导弹 · 独立命中爆炸 · 变体2",
+      "source": {
+        "bank": "weapons_superearth",
+        "event": 2225190964,
+        "variant": 2,
+        "recipe": "weapons_superearth-2728-event {r} {!}.txtp",
+        "layers": [
+          {
+            "media_id": "388459848",
+            "start": 0.4,
+            "gain_db": -6.0,
+            "rate": 1
+          },
+          {
+            "media_id": "413421043",
+            "start": 0,
+            "gain_db": -6.300000011920929,
+            "rate": 1
+          },
+          {
+            "media_id": "1048609434",
+            "start": 2.0,
+            "gain_db": -8.0,
+            "rate": 1
+          },
+          {
+            "media_id": "1045203190",
+            "start": 2.7,
+            "gain_db": -5.0,
+            "rate": 1
+          }
+        ],
+        "missing_plugins": [
+          "?.plugin-00830402 #i",
+          "?.plugin-00830402 #i",
+          "?.plugin-00830402 #i",
+          "?.plugin-00830402 #i",
+          "?.plugin-00830402 #i"
+        ],
+        "name": "大档导弹 · 独立命中爆炸 · 变体2",
+        "phase": "命中",
+        "event_name": "exp_hellbomb",
+        "processing": {
+          "release_seconds": 0.86,
+          "tail_fade_seconds": 0.27,
+          "note": "重型仅保留爆炸前段与0.4秒压力波，裁掉2秒以后的远处回响。"
+        }
+      },
+      "runtime_gain_db": -10.0,
+      "pitch_ratio": 1.0
+    },
+    {
+      "file": "missile_hit_medium_01.wav",
+      "duration": 0.58,
+      "sha256": "79647f68362a63849f1894c66e1c053ced9f575f631c9ce3e7ab3c4f7c901fb0",
+      "name": "中档导弹 · 独立命中爆炸 · 变体1",
+      "source": {
+        "bank": "weapons_superearth",
+        "event": 1337834337,
+        "variant": 1,
+        "recipe": "weapons_superearth-2652-event {r}.txtp",
+        "layers": [
+          {
+            "media_id": "906367435",
+            "start": 0,
+            "gain_db": -7.0,
+            "rate": 1
+          },
+          {
+            "media_id": "831951500",
+            "start": 0,
+            "gain_db": -25.0,
+            "rate": 1
+          },
+          {
+            "media_id": "157403119",
+            "start": 0,
+            "gain_db": -8.0,
+            "rate": 1
+          },
+          {
+            "media_id": "771632698",
+            "start": 0,
+            "gain_db": -12.0,
+            "rate": 1
+          },
+          {
+            "media_id": "569739753",
+            "start": 0,
+            "gain_db": -6.0,
+            "rate": 1
+          },
+          {
+            "media_id": "500270993",
+            "start": 0,
+            "gain_db": -11.0,
+            "rate": 1
+          },
+          {
+            "media_id": "340718723",
+            "start": 0,
+            "gain_db": -9.0,
+            "rate": 1
+          },
+          {
+            "media_id": "913154521",
+            "start": 0,
+            "gain_db": -13.0,
+            "rate": 1
+          },
+          {
+            "media_id": "194946992",
+            "start": 0,
+            "gain_db": -11.0,
+            "rate": 1
+          },
+          {
+            "media_id": "488989688",
+            "start": 0,
+            "gain_db": -13.0,
+            "rate": 1
+          },
+          {
+            "media_id": "700084031",
+            "start": 0,
+            "gain_db": -11.0,
+            "rate": 1
+          },
+          {
+            "media_id": "505950339",
+            "start": 0,
+            "gain_db": -12.0,
+            "rate": 1
+          },
+          {
+            "media_id": "310365527",
+            "start": 0.5,
+            "gain_db": -14.0,
+            "rate": 1
+          },
+          {
+            "media_id": "762175311",
+            "start": 0.5,
+            "gain_db": -14.0,
+            "rate": 1
+          }
+        ],
+        "missing_plugins": [],
+        "name": "中档导弹 · 独立命中爆炸 · 变体1",
+        "phase": "命中",
+        "event_name": "exp_medium_02",
+        "processing": {
+          "release_seconds": 0.58,
+          "tail_fade_seconds": 0.2,
+          "note": "独立爆炸原事件声层，短尾处理。"
+        }
+      },
+      "runtime_gain_db": -10.0,
+      "pitch_ratio": 1.0
+    },
+    {
+      "file": "missile_hit_medium_02.wav",
+      "duration": 0.58,
+      "sha256": "2f82d04be3f6480b846802545bd80912193ad5801f72265f45282aeabd79b09b",
+      "name": "中档导弹 · 独立命中爆炸 · 变体2",
+      "source": {
+        "bank": "weapons_superearth",
+        "event": 1337834337,
+        "variant": 2,
+        "recipe": "weapons_superearth-2652-event {r}.txtp",
+        "layers": [
+          {
+            "media_id": "655763939",
+            "start": 0,
+            "gain_db": -7.0,
+            "rate": 1
+          },
+          {
+            "media_id": "160863035",
+            "start": 0,
+            "gain_db": -25.0,
+            "rate": 1
+          },
+          {
+            "media_id": "824134147",
+            "start": 0,
+            "gain_db": -8.0,
+            "rate": 1
+          },
+          {
+            "media_id": "460473649",
+            "start": 0,
+            "gain_db": -12.0,
+            "rate": 1
+          },
+          {
+            "media_id": "294990037",
+            "start": 0,
+            "gain_db": -6.0,
+            "rate": 1
+          },
+          {
+            "media_id": "374774047",
+            "start": 0,
+            "gain_db": -11.0,
+            "rate": 1
+          },
+          {
+            "media_id": "623838743",
+            "start": 0,
+            "gain_db": -9.0,
+            "rate": 1
+          },
+          {
+            "media_id": "119165141",
+            "start": 0,
+            "gain_db": -13.0,
+            "rate": 1
+          },
+          {
+            "media_id": "142815508",
+            "start": 0,
+            "gain_db": -11.0,
+            "rate": 1
+          },
+          {
+            "media_id": "389227331",
+            "start": 0,
+            "gain_db": -13.0,
+            "rate": 1
+          },
+          {
+            "media_id": "596578357",
+            "start": 0,
+            "gain_db": -11.0,
+            "rate": 1
+          },
+          {
+            "media_id": "249636433",
+            "start": 0,
+            "gain_db": -12.0,
+            "rate": 1
+          },
+          {
+            "media_id": "455617782",
+            "start": 0.5,
+            "gain_db": -14.0,
+            "rate": 1
+          },
+          {
+            "media_id": "418719564",
+            "start": 0.5,
+            "gain_db": -14.0,
+            "rate": 1
+          }
+        ],
+        "missing_plugins": [],
+        "name": "中档导弹 · 独立命中爆炸 · 变体2",
+        "phase": "命中",
+        "event_name": "exp_medium_02",
+        "processing": {
+          "release_seconds": 0.58,
+          "tail_fade_seconds": 0.2,
+          "note": "独立爆炸原事件声层，短尾处理。"
+        }
+      },
+      "runtime_gain_db": -10.0,
+      "pitch_ratio": 1.0
+    },
+    {
+      "file": "missile_hit_small_01.wav",
+      "duration": 0.38,
+      "sha256": "c9415b4f5181ed99a3e09baab9ad8dbd145077d8859abd34d594ec7199d5f79b",
+      "name": "小档导弹 · 独立命中爆炸 · 变体1",
+      "source": {
+        "bank": "weapons_superearth",
+        "event": 1337834337,
+        "variant": 3,
+        "recipe": "weapons_superearth-2652-event {r}.txtp",
+        "layers": [
+          {
+            "media_id": "633957935",
+            "start": 0,
+            "gain_db": -7.0,
+            "rate": 1
+          },
+          {
+            "media_id": "482540243",
+            "start": 0,
+            "gain_db": -25.0,
+            "rate": 1
+          },
+          {
+            "media_id": "178343049",
+            "start": 0,
+            "gain_db": -8.0,
+            "rate": 1
+          }
+        ],
+        "missing_plugins": [],
+        "name": "小档导弹 · 独立命中爆炸 · 变体1",
+        "phase": "命中",
+        "event_name": "exp_medium_02",
+        "processing": {
+          "release_seconds": 0.38,
+          "tail_fade_seconds": 0.14,
+          "note": "另选第3/4组爆压主体录音，只留前三条声层，替换旧 exp_small_01；原音高、短尾处理。"
+        }
+      },
+      "runtime_gain_db": -10.0,
+      "pitch_ratio": 1.0
+    },
+    {
+      "file": "missile_hit_small_02.wav",
+      "duration": 0.38,
+      "sha256": "7bd062f146fa212dd319ce63e81fda6babb5ca670768d02318893ad8b30eb8f4",
+      "name": "小档导弹 · 独立命中爆炸 · 变体2",
+      "source": {
+        "bank": "weapons_superearth",
+        "event": 1337834337,
+        "variant": 4,
+        "recipe": "weapons_superearth-2652-event {r}.txtp",
+        "layers": [
+          {
+            "media_id": "558062071",
+            "start": 0,
+            "gain_db": -7.0,
+            "rate": 1
+          },
+          {
+            "media_id": "110728468",
+            "start": 0,
+            "gain_db": -25.0,
+            "rate": 1
+          },
+          {
+            "media_id": "864778093",
+            "start": 0,
+            "gain_db": -8.0,
+            "rate": 1
+          }
+        ],
+        "missing_plugins": [],
+        "name": "小档导弹 · 独立命中爆炸 · 变体2",
+        "phase": "命中",
+        "event_name": "exp_medium_02",
+        "processing": {
+          "release_seconds": 0.38,
+          "tail_fade_seconds": 0.14,
+          "note": "另选第3/4组爆压主体录音，只留前三条声层，替换旧 exp_small_01；原音高、短尾处理。"
+        }
+      },
+      "runtime_gain_db": -10.0,
+      "pitch_ratio": 1.0
+    },
+    {
+      "file": "missile_large_01.wav",
+      "duration": 0.5,
+      "sha256": "8219e1b4d8c5ae627ce55b99f103174b957203b2a4e430de070f65ecbd8a4a5e",
+      "name": "大档导弹 · 火箭哨戒炮 · 柔化发射",
+      "source": {
+        "bank": "stratagems_sentry_rocket",
+        "event": 3947361741,
+        "variant": 1,
+        "recipe": "stratagems_sentry_rocket-0097-event {r} {!}.txtp",
+        "layers": [
+          {
+            "media_id": "627754482",
+            "start": 0.2,
+            "gain_db": -9.0,
+            "rate": 1
+          },
+          {
+            "media_id": "725471908",
+            "start": 0,
+            "gain_db": -14.0,
+            "rate": 1
+          },
+          {
+            "media_id": "745293544",
+            "start": 0,
+            "gain_db": -18.0,
+            "rate": 1
+          }
+        ],
+        "missing_plugins": [
+          "?.plugin-00830402 #i"
+        ],
+        "name": "大档导弹 · 火箭哨戒炮 · 柔化发射",
+        "phase": "发射",
+        "processing": {
+          "highpass_hz": 80,
+          "lowpass_hz": 7500,
+          "fade_in_seconds": 0.025,
+          "attack_body_rise_seconds": 0.075,
+          "initial_pressure_gain": 0.3,
+          "release_seconds": 0.5,
+          "tail_fade_seconds": 0.1
+        }
+      },
+      "runtime_gain_db": -18.0,
+      "pitch_ratio": 1.0
+    },
+    {
+      "file": "missile_medium_01.wav",
+      "duration": 0.42,
+      "sha256": "6e6313249cd575f66ff9b62ed72351f11938281b55c11a80c53fbf4fbca50af4",
+      "name": "中档导弹 · 空爆火箭筒 · 柔化发射",
+      "source": {
+        "bank": "wep_airburst_rocket_launcher",
+        "event": 4127230894,
+        "variant": 1,
+        "recipe": "wep_airburst_rocket_launcher-0601-event {r} {!}.txtp",
+        "layers": [
+          {
+            "media_id": "484621696",
+            "start": 0.009999999776482582,
+            "gain_db": 2.0,
+            "rate": 1
+          },
+          {
+            "media_id": "329443739",
+            "start": 0.05000000074505806,
+            "gain_db": 2.5,
+            "rate": 1
+          },
+          {
+            "media_id": "1038468194",
+            "start": 0,
+            "gain_db": -5.5,
+            "rate": 1
+          },
+          {
+            "media_id": "484010576",
+            "start": 0,
+            "gain_db": -1.5,
+            "rate": 1
+          },
+          {
+            "media_id": "42430453",
+            "start": 0.2,
+            "gain_db": -4.0,
+            "rate": 1
+          }
+        ],
+        "missing_plugins": [
+          "?.plugin-00830402 #i  #v -7.0dB",
+          "?.plugin-00830402 #i"
+        ],
+        "name": "中档导弹 · 空爆火箭筒 · 柔化发射",
+        "phase": "发射",
+        "processing": {
+          "highpass_hz": 80,
+          "lowpass_hz": 7500,
+          "fade_in_seconds": 0.025,
+          "attack_body_rise_seconds": 0.075,
+          "initial_pressure_gain": 0.3,
+          "release_seconds": 0.42,
+          "tail_fade_seconds": 0.1
+        }
+      },
+      "runtime_gain_db": -18.0,
+      "pitch_ratio": 1.0
+    },
+    {
+      "file": "missile_small_01.wav",
+      "duration": 0.36,
+      "sha256": "cc50b3803e255d15ecedbea6e349fbdd84b27bf95790a294084b9e855296dc9d",
+      "name": "小档导弹 · WASP · 柔化发射",
+      "source": {
+        "bank": "wep_stax3_wasp_launcher",
+        "event": 315345141,
+        "variant": 1,
+        "recipe": "wep_stax3_wasp_launcher-0552-event {r} {!}.txtp",
+        "layers": [
+          {
+            "media_id": "455087860",
+            "start": 0,
+            "gain_db": -8.0,
+            "rate": 1
+          },
+          {
+            "media_id": "714606368",
+            "start": 0,
+            "gain_db": -9.0,
+            "rate": 1
+          },
+          {
+            "media_id": "243830353",
+            "start": 0,
+            "gain_db": -11.0,
+            "rate": 1
+          },
+          {
+            "media_id": "716108958",
+            "start": 0,
+            "gain_db": -3.0,
+            "rate": 1
+          },
+          {
+            "media_id": "816268318",
+            "start": 0.4000000059604645,
+            "gain_db": -16.0,
+            "rate": 1
+          },
+          {
+            "media_id": "241395522",
+            "start": 0,
+            "gain_db": -20.0,
+            "rate": 1
+          }
+        ],
+        "missing_plugins": [
+          "?.plugin-00830402 #i"
+        ],
+        "name": "小档导弹 · WASP · 柔化发射",
+        "phase": "发射",
+        "processing": {
+          "highpass_hz": 80,
+          "lowpass_hz": 7500,
+          "fade_in_seconds": 0.025,
+          "attack_body_rise_seconds": 0.075,
+          "initial_pressure_gain": 0.3,
+          "release_seconds": 0.36,
+          "tail_fade_seconds": 0.1
+        }
+      },
+      "runtime_gain_db": -18.0,
+      "pitch_ratio": 1.0
+    },
+    {
+      "file": "proj_large_01.wav",
+      "slot": "proj.large",
+      "name": "轨道 380mm 高爆重炮 · 完整射击 · 短尾音",
+      "sound_id": "606f96f6daf54f76c60501a9",
+      "duration": 1.93,
+      "pitch_ratio": 1.0,
+      "sha256": "26356916e172fcb3b8c7466ef94c98f9ea844dcd9b69871e229b3cfd92b00756"
+    },
+    {
+      "file": "proj_medium_01.wav",
+      "slot": "proj.medium",
+      "name": "Autocannon 自动炮 · 完整射击 · 短尾音",
+      "sound_id": "26c4929659b7cf68ec6ddf59",
+      "duration": 1.48,
+      "pitch_ratio": 1.0,
+      "sha256": "b75cba49a279c48b48223bb4d1c5f2baddf55e8fb2b3ff170d890f41ff8ccb72"
+    },
+    {
+      "file": "proj_small_01.wav",
+      "slot": "proj.small",
+      "name": "Eruptor · 完整射击 · 短尾音",
+      "sound_id": "db0c48aa3b2bac8d5989381c",
+      "duration": 1.23,
+      "pitch_ratio": 1.0,
+      "sha256": "76ad7ef54f55ca98adfd9edaa7883c9585a6c3e2d7eba7305e082b851e0e5c73"
+    }
+  ],
+  "missile_reference_revision": {
+    "mapping": {
+      "small": "WASP",
+      "medium": "空爆火箭筒",
+      "large": "火箭哨戒炮"
+    },
+    "launch_gain_db": -18.0,
+    "impact_gain_db": -10.0,
+    "launch_trigger": "powered ignition per missile",
+    "audio_scope": "Each of the three missiles has its own release, engine and impact; each engine stops on its own contact or cancellation.",
+    "source": "Local Helldivers 2 banks; event-name hashes checked against native Wwise events.",
+    "report": "installed.json"
+  }
+}

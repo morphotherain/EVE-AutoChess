@@ -1,5 +1,6 @@
 extends Node3D
 class_name EveBattleArena
+signal attack_presented(event: Dictionary)
 
 ## EVE 自走棋 —— 战斗竞技场（3D 场景根）
 ##
@@ -117,6 +118,7 @@ const BOARD_SCRIPT := preload("res://scripts/scene/eve_board.gd")
 #    不 preload 它就不会被编译，避免「一个已停用的文件」还能让整个工程编译失败。
 # const BENCH_STAGE_SCRIPT := preload("res://scripts/scene/eve_bench_stage.gd")
 const BATTLE_FX_SCRIPT := preload("res://scripts/visual/eve_battle_fx.gd")
+const METERS_PER_UNIT := EveShipVisual.METERS_PER_UNIT
 
 
 func _ready() -> void:
@@ -442,11 +444,12 @@ func _build_environment() -> void:
 	else:
 		env.fog_enabled = false
 
-	# glow：只留一点点给舰船引擎辉光，绝对不许有 bloom（bloom = 全局模糊 = 朦胧本体）
+	# 2026-11-05: deliberate exaggerated combat glow, supported by explicit
+	# material halos as well as HDR glow. Dark backgrounds remain below threshold.
 	env.glow_enabled = true
-	env.glow_intensity = 0.45
-	env.glow_bloom = 0.0          # ⚠️ 之前是 0.08，这个值就是「胧」的元凶
-	env.glow_hdr_threshold = 1.0  # 只有超过 1.0 的过曝区才发光，背景够不到
+	env.glow_intensity = 0.95
+	env.glow_bloom = 0.08
+	env.glow_hdr_threshold = 1.25
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
 
 	# 拉一点对比度和饱和度回来，补偿 LINEAR 下的平淡。
@@ -782,8 +785,73 @@ func reset_camera() -> void:
 
 # ------------------------------------------------------------------ 打击特效（阶段 D）
 
+func fx_ship_nodes() -> Dictionary:
+	return _ship_nodes
 
-## 开火线（黄色细线，一次开火亮一条 · 两端连着开火方与被打击方）
+
+func fx_electronic_state(snapshot: Dictionary) -> void:
+	if battle_fx != null:
+		battle_fx.sync_electronic_state(snapshot, _ship_nodes)
+
+
+func fx_electronic_attempt(event: Dictionary) -> void:
+	if battle_fx != null:
+		battle_fx.electronic_attempt(event, _ship_nodes)
+
+
+func fx_attack(event: Dictionary) -> void:
+	if battle_fx == null:
+		return
+	var from_meters: Vector3 = event["from"]
+	var to_meters: Vector3 = event["to"]
+	var source: Node3D = get_ship_visual(int(event["source_id"]))
+	var target: Node3D = get_ship_visual(int(event["target_id"]))
+	if battle_fx.weapon_audio != null:
+		battle_fx.weapon_audio.stop_charge(int(event["source_id"]))
+	var shield_slot:=-1
+	if is_instance_valid(source):
+		from_meters = source.fx_mount_world(to_meters / METERS_PER_UNIT, false) * METERS_PER_UNIT
+	if bool(event["hit"]) and is_instance_valid(target):
+		if event.layer==&"shield":
+			shield_slot=target.fx_shield_slot(from_meters/METERS_PER_UNIT)
+		to_meters = target.fx_contact_world(from_meters / METERS_PER_UNIT,
+			event["layer"] == &"shield",Vector2.ZERO,shield_slot) * METERS_PER_UNIT
+	if event["weapon"] == &"missile" and int(event.get("flight_id", 0)) > 0:
+		battle_fx.resolve_missile(int(event.flight_id), to_meters, bool(event.hit),
+			int(event.quality), StringName(event.layer),shield_slot)
+	else:
+		battle_fx.spawn_weapon(event["weapon"], from_meters, to_meters,
+			event["hit"], event["quality"], event["tier"], event["star"],
+			event["logistics"], event["layer"], event["visual_seed"],
+			{"source_visual": source, "target_visual": target,"shield_slot":shield_slot})
+	var feedback:=event.duplicate()
+	if is_instance_valid(target):
+		battle_fx.present_impact(event,target,from_meters/METERS_PER_UNIT,to_meters/METERS_PER_UNIT)
+		feedback["target_visual"]=weakref(target)
+		feedback["screen_position"]=target.feedback_screen_position(get_viewport().get_camera_3d())
+	attack_presented.emit(feedback)
+
+
+func advance_hit_feedback(delta: float) -> void:
+	for visual in _ship_nodes.values():
+		if is_instance_valid(visual):
+			visual.advance_hit_feedback(delta)
+
+
+func fx_launch_missile(event: Dictionary) -> void:
+	var payload := event.duplicate()
+	var source: Node3D = get_ship_visual(int(event.source_id))
+	var target: Node3D = get_ship_visual(int(event.target_id))
+	if is_instance_valid(source):
+		payload["from"] = source.fx_mount_world(event.to / METERS_PER_UNIT) * METERS_PER_UNIT
+		payload["source_visual"] = source
+	if is_instance_valid(target):
+		payload["to"] = target.fx_center_world() * METERS_PER_UNIT
+		payload["target_visual"] = target
+		payload["target_ship"] = target.ship
+	battle_fx.launch_missile(payload)
+
+
 func fx_tracer(from_meters: Vector3, to_meters: Vector3, hit: bool,
 		quality: int = 3) -> void:
 	if battle_fx != null:
@@ -801,7 +869,7 @@ func set_shield_decal_colors(mid: Color, high: Color, core: Color = Color(0.94, 
 		if node != null and is_instance_valid(node) and node.has_method("set_shield_decal_colors"):
 			node.set_shield_decal_colors(mid, high, core)
 
-## 炮击攻击特效（长条亮痕，头部停在护盾锚点）
+## Compatibility entry for isolated tools; uses the rebuilt laser renderer.
 func fx_artillery(from_meters: Vector3, to_meters: Vector3, quality: int = 3) -> void:
 	if battle_fx != null:
 		battle_fx.spawn_artillery(from_meters, to_meters, quality)
@@ -824,6 +892,12 @@ func fx_hit(pos_meters: Vector3, quality: int, layer: StringName = &"") -> void:
 func fx_boom(pos_meters: Vector3) -> void:
 	if battle_fx != null:
 		battle_fx.spawn_boom(pos_meters)
+
+
+func fx_destroy_ship(ship: EveShip) -> void:
+	var visual: Node3D = get_ship_visual(ship.id)
+	if battle_fx != null and is_instance_valid(visual):
+		battle_fx.spawn_ship_destruction(visual, ship.cost, ship.id, ship.body.velocity)
 
 
 ## 清空特效（重开一局 / 清场时调）
@@ -1716,7 +1790,9 @@ func spawn_ship_visual(ship: EveShip) -> Node3D:
 	var visual: Node3D = SHIP_SCENE_SCRIPT.new()
 	visual.name = "Ship_%d" % ship.id
 	ships_layer.add_child(visual)
+	visual.feedback_managed=true
 	visual.setup(ship)
+	visual.set_process(false)
 	# 布阵途中重建舰队时，新船必须继承当前的布阵态 ——
 	# 否则「放大 3 倍」只对拖动前就存在的船生效，刚放下的那艘还是原尺寸。
 	if ships_board_mode and visual.has_method("set_board_mode"):

@@ -288,6 +288,7 @@ func cancel() -> void:
 
 func open_dialog() -> void:
 	visible = true
+	EveUiAudio.play("window.open")
 	# HUD 根上它加得比暂停遮罩/拖动幽灵早 ⇒ 不提最前会被遮罩压住
 	move_to_front()
 	# ⚠️ 焦点给「取消」而不是「确定」：scrim 挡鼠标但不挡键盘，
@@ -306,11 +307,13 @@ func close_dialog() -> void:
 # ══════════════════════════════════════════════════════════════════
 
 func _on_ok_pressed() -> void:
+	EveUiAudio.play("ui.confirm")
 	close_dialog()
 	confirmed.emit()
 
 
 func _on_cancel_pressed() -> void:
+	EveUiAudio.play("ui.cancel")
 	close_dialog()
 	cancelled.emit()
 

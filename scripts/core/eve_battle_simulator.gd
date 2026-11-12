@@ -16,12 +16,21 @@ class_name EveBattleSimulator
 
 signal unit_destroyed(ship: EveShip)
 signal shot_fired(attacker: EveShip, target: EveShip, hit: bool, quality: int, damage: float)
+signal attack_resolved(event: Dictionary)
+signal missile_launched(event: Dictionary)
+signal missile_cancelled(flight_id: int)
+signal electronic_state_changed(snapshot: Dictionary)
+signal electronic_attempted(event: Dictionary)
 signal battle_finished(winner_team: int)
 
 const TICK_RATE := 30.0
 const FIXED_STEP := 1.0 / TICK_RATE
 ## ★ 2026-10-10（审查 2#5）：战斗语义 id + `_extra` 键名常量（见 `EveCombatIds`）。
 const CIDS := preload("res://scripts/core/eve_combat_ids.gd")
+# Visible homing salvos: snapshot application/rolls at launch; apply to current
+# HP on arrival. Dead sources do not recall rounds; dead targets cancel rounds.
+var _pending_missiles: Array[Dictionary] = []
+var _next_flight_id := 0
 const MAX_TICKS := 30 * 180   ## 最长 180 秒，超时判平
 ##
 ## 为什么是 180 秒而不是 120 秒：
@@ -202,6 +211,8 @@ const LOCK_REFRESH_INTERVAL := 5.0 / TICK_RATE
 
 
 func setup(own_ships: Array[EveShip], enemy_ships: Array[EveShip]) -> void:
+	_pending_missiles.clear()
+	_next_flight_id = 0
 	ships.clear()
 	_ship_by_id.clear()
 	log_entries.clear()
@@ -376,6 +387,7 @@ func _advance_one_tick(dt: float) -> void:
 		if ship.locked:
 			_try_fire(ship, dt)
 
+	_update_missiles()
 	# --- 5. 胜负判定 ---
 	_check_outcome()
 
@@ -869,6 +881,7 @@ func _update_lock(ship: EveShip, dt: float) -> void:
 ## ⚠️ `outgoing_mult` 每帧从 1.0 重算，⛔ 不要累乘 —— 锁定关系每 5 tick 就可能换
 ##    （换目标 / 目标被打死），累乘会让旧目标的减伤永远消不掉。
 func _ew_step(dt: float) -> void:
+	var attempts: Array[Dictionary] = []
 	# ① 复位到「没有电子战影响」
 	for ship in ships:
 		ship.outgoing_mult = 1.0
@@ -888,21 +901,53 @@ func _ew_step(dt: float) -> void:
 			ship.jam_timer -= dt
 			if ship.jam_timer <= 0.0:
 				ship.jam_timer += EveShip.JAM_CYCLE
-				if rng.randf() < ship.jam_chance:
+				var success := rng.randf() < ship.jam_chance
+				var was_free := tgt.jam_disabled <= 0.0
+				if success:
 					# ⚠️ 只在「从没被干扰」时记一条：连续干扰每 5 秒一次，
 					#    每次都记会把 120 行的日志挤满，反而盖掉真正要紧的战报。
 					#    判据必须在赋值**之前**读。
-					var was_free := tgt.jam_disabled <= 0.0
 					tgt.jam_disabled = maxf(tgt.jam_disabled, EveShip.JAM_DURATION)
 					if was_free:
 						_log(&"system", "%s 干扰 %s · %.0f 秒无法开火"
 								% [ship.ship_name, tgt.ship_name, EveShip.JAM_DURATION],
 								tgt.team)
+				# Reuse the real roll. Presentation never draws from the battle RNG.
+				attempts.append({"source_id": ship.id, "target_id": tgt.id,
+					"success": success, "refreshed": success and not was_free, "time": elapsed,
+					"visual_seed": (ship.id * 73856093) ^ (tgt.id * 19349663) ^ (tick * 83492791)})
 
 	# ③ 递减禁火倒计时（放最后：本帧刚命中的那艘也从**下一帧**开始扣）
 	for ship in ships:
 		if ship.jam_disabled > 0.0:
 			ship.jam_disabled = maxf(0.0, ship.jam_disabled - dt)
+	electronic_state_changed.emit(electronic_snapshot())
+	for event in attempts:
+		event.make_read_only()
+		electronic_attempted.emit(event)
+
+
+## Read-only current relationships and remaining jam state. Includes every
+## source; the renderer merges target layers using the same strongest-wins rule.
+func electronic_snapshot() -> Dictionary:
+	var relations: Array[Dictionary] = []
+	var jams: Array[Dictionary] = []
+	for ship in ships:
+		if not ship.alive: continue
+		if ship.jam_disabled > 0.0:
+			jams.append({"target_id": ship.id, "remaining": ship.jam_disabled})
+		if not ship.is_ew or ship.ew_lock_reduce <= 0.0: continue
+		var target: EveShip = _ship_by_id.get(ship.target_id)
+		if target != null and target.alive:
+			relations.append({"source_id": ship.id, "target_id": target.id,
+				"strength": ship.ew_lock_reduce})
+	for relation in relations: relation.make_read_only()
+	for jam in jams: jam.make_read_only()
+	relations.make_read_only()
+	jams.make_read_only()
+	var snapshot := {"time": elapsed, "relations": relations, "jams": jams}
+	snapshot.make_read_only()
+	return snapshot
 
 
 # ------------------------------------------------------------------ 开火
@@ -989,7 +1034,8 @@ func _fire_once(ship: EveShip, target: EveShip) -> void:
 		quality = result["quality"]
 		multiplier = float(result["multiplier"])
 
-	if not hit:
+	if not hit and ship.weapon_id != CIDS.W_MISSILE:
+		_publish_attack(ship, target, false, EveCombatCore.HitQuality.MISS, 0.0)
 		shot_fired.emit(ship, target, false, EveCombatCore.HitQuality.MISS, 0.0)
 		return
 
@@ -1018,12 +1064,56 @@ func _fire_once(ship: EveShip, target: EveShip) -> void:
 	#   ⚠️ 只有护盾还在时才掷 —— 盾已经破了，掷不掷结果一样，
 	#      白白消耗随机数会让同一颗种子下的战报跟以前对不上。
 	var pierced := 0.0
-	if ship.shield_pierce > 0.0 and float(target.hp.get(&"shield", 0.0)) > 0.0:
+	if hit and ship.shield_pierce > 0.0 and float(target.hp.get(&"shield", 0.0)) > 0.0:
 		if rng.randf() < ship.shield_pierce:
 			pierced = 1.0
+	if ship.cap_max > 0.0:
+		ship.cap = maxf(0.0, ship.cap - ship.cap_use * 0.35)
+	if ship.weapon_id == CIDS.W_MISSILE:
+		_next_flight_id += 1
+		var duration := EveCombatCore.missile_flight_duration(distance)
+		var flight := {"id": _next_flight_id, "source": ship, "target": target,
+			"arrive": elapsed + duration, "damage": raw_damage, "hit": hit,
+			"quality": quality, "pierced": pierced, "profile": ship.weapon_profile.duplicate(),
+			"armor_pierce": ship.armor_pierce}
+		_pending_missiles.append(flight)
+		missile_launched.emit({"flight_id": _next_flight_id, "source_id": ship.id,
+			"target_id": target.id, "from": ship.body.position, "to": target.body.position,
+			"duration": duration, "tier": ship.cost, "star": ship.star,
+			"logistics": ship.is_logistics, "hit": hit,"pierced":pierced>0.5,
+			"visual_seed": tick * 7919 + ship.id * 179 + _next_flight_id})
+		return
+	_resolve_hit(ship, target, quality, raw_damage, ship.weapon_profile, ship.armor_pierce, pierced)
+
+
+func _update_missiles() -> void:
+	# Stable launch order determines same-tick impacts; presentation uses no RNG.
+	var remaining: Array[Dictionary] = []
+	for flight in _pending_missiles:
+		var target: EveShip = flight.target
+		if not target.alive:
+			missile_cancelled.emit(int(flight.id))
+			continue
+		if elapsed + _STEP_EPS < float(flight.arrive):
+			remaining.append(flight)
+			continue
+		var source: EveShip = flight.source
+		if not bool(flight.hit):
+			_publish_attack(source, target, false, EveCombatCore.HitQuality.MISS, 0.0,
+				{}, false, int(flight.id))
+			shot_fired.emit(source, target, false, EveCombatCore.HitQuality.MISS, 0.0)
+			continue
+		_resolve_hit(source, target, int(flight.quality), float(flight.damage),
+			flight.profile, float(flight.armor_pierce), float(flight.pierced), int(flight.id))
+	_pending_missiles = remaining
+
+
+func _resolve_hit(ship: EveShip, target: EveShip, quality: int, raw_damage: float,
+		profile: PackedFloat32Array, armor_pierce: float, pierced: float, flight_id: int = 0) -> void:
+	if not target.alive:
+		return
 	var result := EveCombatCore.apply_damage(
-		target.hp, target.resists, raw_damage, ship.weapon_profile, false,
-		ship.armor_pierce, pierced
+		target.hp, target.resists, raw_damage, profile, false, armor_pierce, pierced
 	)
 	var applied := float(result["applied"])
 	# ★ 2026-10-30：把「这一发穿了盾没有」记在被击中的船上，供播报条用
@@ -1033,9 +1123,7 @@ func _fire_once(ship: EveShip, target: EveShip) -> void:
 	ship.damage_dealt += applied
 	target.damage_taken += applied
 
-	if ship.cap_max > 0.0:
-		ship.cap = maxf(0.0, ship.cap - ship.cap_use * 0.35)
-
+	_publish_attack(ship, target, true, quality, applied, result, pierced > 0.5, flight_id)
 	shot_fired.emit(ship, target, true, quality, applied)
 	_log(&"fire", "%s → %s  %s  %.0f 伤害" % [
 		ship.ship_name, target.ship_name, _quality_text(quality), applied
@@ -1052,7 +1140,33 @@ func _fire_once(ship: EveShip, target: EveShip) -> void:
 		unit_destroyed.emit(target)
 
 
-## 目标有效信号半径
+## Snapshot the resolved result for weapon, receiver, HUD and audio consumers.
+func _publish_attack(source: EveShip, target: EveShip, hit: bool, quality: int,
+		damage: float, result: Dictionary = {}, pierced: bool = false, flight_id: int = 0) -> void:
+	# Presentation snapshots never consume the simulator RNG or resolve damage.
+	var layers: Dictionary = result.get("applied_by_layer", {})
+	var contact: StringName = &"hull"
+	for layer in [&"shield", &"armor", &"hull"]:
+		if float(layers.get(layer, 0.0)) > 0.0:
+			contact = layer
+			break
+	if pierced and float(layers.get(&"armor", 0.0)) > 0.0:
+		contact = &"armor"
+	elif pierced and float(layers.get(&"hull", 0.0)) > 0.0:
+		contact = &"hull"
+	attack_resolved.emit({
+		"flight_id": flight_id,
+		"source_id": source.id, "target_id": target.id,
+		"source_team":source.team,"target_name":target.ship_name,
+		"weapon": source.weapon_id, "tier": source.cost, "star": source.star,
+		"logistics": source.is_logistics, "from": source.body.position,
+		"to": target.body.position, "hit": hit, "quality": quality, "damage": damage,
+		"layer": contact, "pierced": pierced, "layers": layers.duplicate(),
+		"breaks": (result.get("breaks", []) as Array).duplicate(),
+		"time": elapsed, "visual_seed": tick * 7919 + source.id * 179 + target.id,
+	})
+
+
 func _effective_signature(target: EveShip) -> float:
 	var sig := float(target._extra.get(CIDS.X_SIGNATURE, 40.0))
 	return maxf(1.0, sig)
@@ -1716,6 +1830,10 @@ func _check_outcome() -> void:
 		else:
 			enemy_alive += 1
 
+	if own_alive == 0 or enemy_alive == 0:
+		for flight in _pending_missiles:
+			if flight.target.alive:
+				return # Already-launched rounds can produce a posthumous kill/draw.
 	if own_alive == 0 and enemy_alive == 0:
 		_finish(-1)
 	elif enemy_alive == 0:
@@ -1757,6 +1875,9 @@ func _finish(team: int) -> void:
 	if finished:
 		return
 	finished = true
+	for flight in _pending_missiles:
+		missile_cancelled.emit(int(flight.id))
+	_pending_missiles.clear()
 	winner_team = team
 	var text := "平局"
 	if team == 0:
