@@ -11,6 +11,8 @@ const WEAPONS: Array[StringName] = [&"laser", &"hybrid", &"proj", &"missile"]
 const CANNON_MOUNT_STAGGER := .075
 # Use the former close-range arrival time at every engagement distance.
 const HYBRID_ARRIVAL_TIME := 0.14
+const DRONE_PACKET_LENGTH := 0.85
+const DRONE_PACKET_SPEED := 24.0
 
 static func cannon_mount_count(tier: int) -> int:
 	return 2 if tier <= 2 else (3 if tier == 3 else 4)
@@ -22,3 +24,6 @@ static func scale_of(tier: int, star: int = 1, logistics: bool = false) -> float
 	var size := 0.72 + 0.13 * clampi(tier, 1, 5)
 	size *= 1.0 + 0.06 * maxi(0, star - 1)
 	return size * (0.72 if logistics else 1.0)
+
+static func drone_round_scale() -> float:
+	return scale_of(5, 2)

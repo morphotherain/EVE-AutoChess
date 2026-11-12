@@ -9,6 +9,8 @@ const BURST := preload("res://scripts/visual/fx_combat_burst.gdshader")
 const AURA := preload("res://scripts/visual/fx_combat_aura.gdshader")
 const EXHAUST := preload("res://scripts/visual/fx_missile_exhaust.gdshader")
 const MISSILE_IMPACT := preload("res://scripts/visual/eve_missile_impact.gd")
+const DRONE_SQUADRON := preload("res://scripts/visual/eve_drone_squadron.gd")
+const DRONE_CONTACT := preload("res://scripts/visual/fx_drone_contact.gdshader")
 const ELECTRONIC := preload("res://scripts/visual/eve_electronic_fx.gd")
 const EXHAUST_NOISE := preload("res://assets/vfx/combat/scourge/caustic_05c.png")
 const TRAIL := preload("res://scripts/visual/fx_missile_trail.gdshader")
@@ -61,7 +63,7 @@ var _flights: Dictionary = {}
 var _cannon_salvos: Array[Dictionary] = []
 var _ribbon_mesh: PlaneMesh
 var _quad_mesh: QuadMesh
-var stats := {"laser": 0, "hybrid": 0, "proj": 0, "missile": 0, "suppression": 0, "jam": 0, "destruction": 0}
+var stats := {"laser": 0, "hybrid": 0, "proj": 0, "missile": 0, "suppression": 0, "jam": 0, "destruction": 0, "drone": 0}
 var laser_tint := Color(1.0, 0.80, 0.38)
 var electronic: Node3D
 var _electronic_visuals: Array[WeakRef] = []
@@ -687,6 +689,16 @@ func _spawn_weapon_packet(weapon: StringName, from_meters: Vector3, to_meters: V
 	if hit:
 		_weapon_impact(group, b, direction, tint, scale_factor, quality, layer, rng, float(group.get("propagation_time", 0.0)) if weapon == &"hybrid" else a.distance_to(b) / 48.0)
 
+func _drone_projectile(group: Dictionary, a: Vector3, b: Vector3, size: float, tint: Color) -> void:
+	var life := (a.distance_to(b) + Profiles.DRONE_PACKET_LENGTH) / Profiles.DRONE_PACKET_SPEED
+	var band := _band(group, a, b, 2, 0.23 * size, tint, life, 1.4)
+	band.set_shader_parameter("packet_core", Vector3(1.05, 0.92, 1.22))
+	var halo := _aura(group, a, b, size, tint, life, 0.20, 2)
+	for mat in [band, halo]:
+		mat.set_shader_parameter("finite_packet", true)
+		mat.set_shader_parameter("packet_length", Profiles.DRONE_PACKET_LENGTH)
+		mat.set_shader_parameter("packet_speed", Profiles.DRONE_PACKET_SPEED)
+
 func _heavy_round(group: Dictionary, a: Vector3, b: Vector3, size: float,
 		tint: Color, delay: float = 0.0, speed: float = 48.0) -> void:
 	var life := a.distance_to(b) / speed + 0.10
@@ -1283,6 +1295,82 @@ func spawn_ship_destruction(visual: Node3D, tier: int = 3, seed_value: int = 1,
 			"drag":0.8,"spin":Vector3(rng.randf_range(-1.6,1.6),rng.randf_range(-1.6,1.6),rng.randf_range(-1.6,1.6))})
 
 
+## Visual choreography only; gameplay owns deployment, targeting and damage.
+func deploy_drone_squadron(source: Node3D, target: Node3D, model_index: int = 0) -> Node3D:
+	if not fx_enabled or not is_instance_valid(source) or not is_instance_valid(target):
+		return null
+	var group := _group(DRONE_SQUADRON.DURATION, "DroneSquadron")
+	var squadron := DRONE_SQUADRON.new()
+	group.node.add_child(squadron)
+	squadron.configure(self, source, target, model_index)
+	group.drone_squadron = squadron
+	stats.drone += 1
+	return squadron
+
+
+func spawn_drone_round(from: Vector3, target: Node3D) -> void:
+	if not is_instance_valid(target):
+		return
+	var shield := float(target.ship.hp[&"shield"]) > 0.0
+	var slot: int = target.fx_shield_slot(from) if shield else -1
+	var contact: Vector3 = target.fx_contact_world(from, shield, Vector2.ZERO, slot)
+	var flight:=from.distance_to(contact)/Profiles.DRONE_PACKET_SPEED
+	var group := _group(flight+0.32, "DroneRound")
+	group.weapon=&"drone"
+	group.hit=true
+	group.shield=shield
+	group.shield_slot=slot
+	group.a=from
+	group.b=contact
+	group.path_stage=true
+	group.anchors={"target_visual":target}
+	var tint:=Color(0.65,0.30,1.0)
+	_drone_projectile(group, from, contact, Profiles.drone_round_scale(), tint)
+	# A compact hot contact, original animated splash and directional ejecta.
+	# These share the captured shield slot and arrival clock with the round.
+	_bind_marker(group,_burst(group,contact,0.28,0,Color(0.85,0.65,1.0),0.085,5.0,flight),1.0)
+	_bind_marker(group,_burst(group,contact,0.90,0,tint,0.24,1.15,flight),1.0)
+	var splash := _eve_sprite(group,contact,0.95,DRONE_CONTACT,0.25,flight)
+	splash.set_shader_parameter("atlas",IMPACT_SPLASH)
+	splash.set_shader_parameter("flow_atlas",IMPACT_SPLASH_FLOW)
+	splash.set_shader_parameter("energy",2.4)
+	splash.set_shader_parameter("rotation",float(_serial)*1.7)
+	splash.set_shader_parameter("screen_min_px",16.0)
+	splash.set_shader_parameter("screen_max_scale",4.0)
+	splash.set_shader_parameter("firing_axis",Vector3.ZERO)
+	splash.set_shader_parameter("billboard",true)
+	_bind_marker(group,group.node.get_child(group.node.get_child_count()-1),1.0)
+	var direction:Vector3=(contact-from).normalized()
+	var basis:=_basis_for(direction)
+	for i in range(4):
+		var phase:=float(i)*2.39996+float(_serial)*1.7
+		var eject:=(-direction*0.38+basis.x*cos(phase)*0.65+basis.y*sin(phase)*0.55).normalized()
+		_band(group,contact,contact+eject*0.09,1,0.035,tint,0.22,1.8,Vector2.ZERO,flight)
+		var spark:MeshInstance3D=group.node.get_child(group.node.get_child_count()-1)
+		spark.material_override.set_shader_parameter("screen_min_px",1.8)
+		spark.material_override.set_shader_parameter("screen_max_scale",3.0)
+		group.moving.append({"node":spark,"origin":Vector3.ZERO,"velocity":eject*(1.2+float(i)*0.24),
+			"delay":flight,"size":1.0,"expand":false,"drag":3.4})
+	_serial += 1
+	group.path_stage=false
+	group.drone_round = {"target": weakref(target), "from": from, "shield": shield,
+		"slot": slot, "material": group.paths[0].material,"flight":flight,"landed":false}
+
+
+func _advance_drone_round(group: Dictionary) -> void:
+	var round: Dictionary = group.drone_round
+	var target: Node3D = round.target.get_ref()
+	if not is_instance_valid(target):
+		group.node.hide()
+		return
+	# Launch positions stay in world space; only the receiving shield follows.
+	if not round.landed and float(group.t)>=float(round.flight):
+		round.landed=true
+		if round.shield:
+			target._ensure_shield_fx()
+			target.get("_shield_fx").fire_slot(round.slot)
+
+
 func clear_flights() -> void:
 	for id in _flights.keys():
 		cancel_missile(int(id))
@@ -1310,6 +1398,8 @@ func _process(delta: float) -> void:
 	if electronic != null: electronic.advance(0.0 if paused else delta * playback_rate)
 	sync_attachments()
 	for group in _fx:
+		if group.has("drone_squadron"):
+			group.drone_squadron.sync_display()
 		if group.has("kinetic"):
 			group.kinetic.scale = Vector3.ONE * float(group.blast_scale) * _screen_geometry_scale(
 				group.kinetic.global_position, 2.0 * float(group.blast_scale), 52.0)
@@ -1345,6 +1435,10 @@ func _process(delta: float) -> void:
 			mat.set_shader_parameter("age", float(group.t) * float(group.get("material_time_scale", 1.0)))
 		if group.has("kinetic"):
 			group.kinetic.advance(float(group.t))
+		if group.has("drone_squadron"):
+			group.drone_squadron.advance(float(group.t))
+		if group.has("drone_round"):
+			_advance_drone_round(group)
 		for overlay in group.get("overlays",[]):
 			overlay.material.albedo_color.a=overlay.peak*pow(maxf(0.0,1.0-float(group.t)/0.18),2.0)
 		for mover in group.moving:

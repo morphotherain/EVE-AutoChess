@@ -1,0 +1,166 @@
+{
+  "typeID": 33816,
+  "name": "加姆 / Garmur",
+  "source": "https://gamemodels3d.com/games/eveonline/vehicles/33816",
+  "modelNode": "mordu/33816/visual/default/ship",
+  "files": [
+    {
+      "file": "Garmur.obj",
+      "sha256": "ff89130ee26468ec6d9a69fcdec9650d34fc4b6b02be90ee75e863b6870b24c4"
+    },
+    {
+      "file": "Garmur.mtl",
+      "sha256": "c654f5aec6769c22aef7fccb6f4e5e2473f91710e4f2d4f4c05f12627b5cde2d"
+    },
+    {
+      "file": "textures/morf1_t1_d.png",
+      "sha256": "81cc0d136a07ae2ce65cd51662eb83b6c739827b83a65e7469fc8f7a074c4a57"
+    },
+    {
+      "file": "textures/morf1_t1_s.jpg",
+      "sha256": "829a334199e256f082b3c00f4a58e773c38df3564cc63cded9cddf3b629786fe"
+    },
+    {
+      "file": "textures/morf1_t1_n.png",
+      "sha256": "c05399afbe8cefb3e7baf1e8bd48a7a235e34613d2353481658f69a141c61cea"
+    },
+    {
+      "file": "textures/morf1_t1_e.png",
+      "sha256": "ae27ae69033c1d0aadc7b020316ece7659eb51951a8191bf257596d9bd10f890"
+    }
+  ],
+  "geometry": {
+    "key": "",
+    "verts": 6605,
+    "faces": 6642,
+    "groups": 3,
+    "has_uv": true,
+    "dims_raw": [
+      65.922,
+      23.184,
+      103.405
+    ],
+    "axes_raw": {
+      "x_beam": 65.922,
+      "y_height": 23.184,
+      "z_length": 103.405
+    }
+  },
+  "sof": {
+    "uri": "res:/dx9/model/spaceobjectfactory/data.black",
+    "sha256": "323eae26509d6c9bc84eed19e62964a91c9096286cd29f25d385d30ea6d4d40d",
+    "hull": "morf1_t1",
+    "geometry": "res:/dx9/model/ship/mordu/frigate/morf1/morf1_t1.gr2",
+    "boosterTransforms": [
+      [
+        1.2553586959838867,
+        0,
+        0,
+        0,
+        0,
+        1.2553586959838867,
+        0,
+        0,
+        0,
+        0,
+        35.92880630493164,
+        0,
+        6.559500217437744,
+        -1.1365000009536743,
+        -34.87999725341797,
+        1
+      ],
+      [
+        0.620724618434906,
+        0,
+        0,
+        0,
+        0,
+        0.620724618434906,
+        0,
+        0,
+        0,
+        0,
+        22.01988410949707,
+        0,
+        -21.732343673706055,
+        -6.7683000564575195,
+        -21.834646224975586,
+        1
+      ],
+      [
+        0.6401730179786682,
+        0,
+        0,
+        0,
+        0,
+        0.6401730179786682,
+        0,
+        0,
+        0,
+        0,
+        22.06181526184082,
+        0,
+        21.72640609741211,
+        -6.7683000564575195,
+        -21.834646224975586,
+        1
+      ],
+      [
+        0.7412493824958801,
+        0,
+        0,
+        0,
+        0,
+        0.7412493824958801,
+        0,
+        0,
+        0,
+        0,
+        22.263551712036133,
+        0,
+        -19.330198287963867,
+        -6.684776306152344,
+        -22.564212799072266,
+        1
+      ],
+      [
+        0.7429406046867371,
+        0,
+        0,
+        0,
+        0,
+        0.7429406046867371,
+        0,
+        0,
+        0,
+        0,
+        22.283388137817383,
+        0,
+        19.3302001953125,
+        -6.684800148010254,
+        -22.564205169677734,
+        1
+      ],
+      [
+        1.2553586959838867,
+        0,
+        0,
+        0,
+        0,
+        1.2553586959838867,
+        0,
+        0,
+        0,
+        0,
+        35.92880630493164,
+        0,
+        -6.55946159362793,
+        -1.1364527940750122,
+        -34.87999725341797,
+        1
+      ]
+    ]
+  },
+  "adaptation": "Original hull geometry and maps. Coordinate/format conversion, Godot material adapter and normalized comparison size. Native AR uses its authored alpha roughness with a constant metallic response; not a reconstruction of the full SOF paint/material system."
+}

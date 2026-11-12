@@ -1,0 +1,112 @@
+{
+  "typeID": 42685,
+  "name": "旭日 / Sunesis",
+  "source": "https://gamemodels3d.com/games/eveonline/vehicles/42685",
+  "modelNode": "soct/42685/visual/default/ship",
+  "files": [
+    {
+      "file": "Sunesis.obj",
+      "sha256": "ddcfa489c4d881f3bfcf52663d8722ad4758881c8fc0731ca05bc6e6ef48a052"
+    },
+    {
+      "file": "Sunesis.mtl",
+      "sha256": "0dec11765bd291fc5f72122691bc7870b44eb1557f8bf9425c571e3aaeaa5737"
+    },
+    {
+      "file": "textures/soctde1_t1_d.png",
+      "sha256": "ccf867566706977acfe9d51fa40a95667bdfe36959b270143d3567b61c72f788"
+    },
+    {
+      "file": "textures/soctde1_t1_s.jpg",
+      "sha256": "d8293e8bfbae0b5acc55b91a88c4173a126d67e84f47b9b1ec2495bfa99b3cd0"
+    },
+    {
+      "file": "textures/soctde1_t1_n.png",
+      "sha256": "9172f2c20fee348ff80fdd4ed941bfd879f299a696467fb7fb2518af6077a509"
+    },
+    {
+      "file": "textures/soctde1_t1_e.png",
+      "sha256": "5c69e88b43ece52e7af285bd221164d682e9139078ce8c3669fa089495075bf6"
+    }
+  ],
+  "geometry": {
+    "key": "",
+    "verts": 4692,
+    "faces": 4452,
+    "groups": 2,
+    "has_uv": true,
+    "dims_raw": [
+      281.956,
+      44.072,
+      230.305
+    ],
+    "axes_raw": {
+      "x_beam": 281.956,
+      "y_height": 44.072,
+      "z_length": 230.305
+    }
+  },
+  "sof": {
+    "uri": "res:/dx9/model/spaceobjectfactory/data.black",
+    "sha256": "323eae26509d6c9bc84eed19e62964a91c9096286cd29f25d385d30ea6d4d40d",
+    "hull": "soctde1_t1",
+    "geometry": "res:/dx9/model/ship/soct/destroyer/soctde1/soctde1_t1.gr2",
+    "boosterTransforms": [
+      [
+        2.8947601318359375,
+        0,
+        0,
+        0,
+        0,
+        2.8947601318359375,
+        0,
+        0,
+        0,
+        0,
+        102.15289306640625,
+        0,
+        0.046629399061203,
+        -7.315524101257324,
+        -30.98592185974121,
+        1
+      ],
+      [
+        2.192478895187378,
+        0,
+        0,
+        0,
+        0,
+        2.192478895187378,
+        0,
+        0,
+        0,
+        0,
+        97.74132537841797,
+        0,
+        9.213077545166016,
+        2.897754192352295,
+        -60.77289581298828,
+        1
+      ],
+      [
+        2.192478895187378,
+        0,
+        0,
+        0,
+        0,
+        2.192478895187378,
+        0,
+        0,
+        0,
+        0,
+        97.74132537841797,
+        0,
+        -9.213077545166016,
+        2.897754192352295,
+        -60.77289581298828,
+        1
+      ]
+    ]
+  },
+  "adaptation": "Original hull geometry and maps. Coordinate/format conversion, Godot material adapter and normalized comparison size. Native AR uses its authored alpha roughness with a constant metallic response; not a reconstruction of the full SOF paint/material system."
+}

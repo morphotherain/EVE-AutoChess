@@ -1,0 +1,13 @@
+# gamemodels3d official material
+# maps: d=soctde1_t1_d.png s=soctde1_t1_s.jpg n=soctde1_t1_n.png e=soctde1_t1_e.png
+newmtl mat_0
+Kd 1.000000 1.000000 1.000000
+Ka 0.000000 0.000000 0.000000
+Ks 0.300000 0.300000 0.300000
+Ns 32.0
+d 1.0
+illum 2
+map_Kd textures/soctde1_t1_d.png
+# specular map = 材质分区图（不是渐进高光）
+map_Ks textures/soctde1_t1_s.jpg
+map_Bump textures/soctde1_t1_n.png

@@ -6,3 +6,4 @@ assets/vfx/combat/hull_locators.json linguist-generated=true
 assets/vfx/combat/electronic/electronic_assets.gd linguist-generated=true
 assets/vfx/combat/scourge/scourge_source.gd linguist-generated=true
 assets/vfx/combat/**/*.obj linguist-generated=true
+assets/vfx/combat/drones/drone_models.gd linguist-generated=true
