@@ -47,7 +47,9 @@ vec2 tile(vec2 p, float frame) {
 	return (clamp(p, vec2(0.006), vec2(0.994)) + vec2(mod(frame, atlas_grid), floor(frame / atlas_grid))) / atlas_grid;
 }
 void fragment() {
-	if (t < 0.0 || t >= particle.y) { discard; }
+	// [PITFALL] 禁用 discard（D3D12+Intel Arc 会设备丢失），改存活遮罩
+	float alive = 1.0;
+	if (t < 0.0 || t >= particle.y) { alive = 0.0; }
 	float envelope = smoothstep(0.0, 0.012, t) * (1.0 - smoothstep(0.35, 1.0, k));
 	vec3 light = vec3(0.0);
 	if (kind < 0.5) {
@@ -79,6 +81,6 @@ void fragment() {
 		float r2 = dot(p, p);
 		light = tint * (exp(-r2 * 5.0) * 0.5 + exp(-r2 * 36.0) * 2.0);
 	}
-	ALBEDO = light * grade * envelope * energy * particle.w;
+	ALBEDO = light * grade * envelope * energy * particle.w * alive;
 	ALPHA = 1.0;
 }

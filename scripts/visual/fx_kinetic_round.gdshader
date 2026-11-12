@@ -25,7 +25,9 @@ void vertex() {
 	POSITION=PROJECTION_MATRIX*VIEW_MATRIX*vec4(pos,1.0);
 }
 void fragment() {
-	if(age<delay || age-delay>lifetime || along<0.0 || along>span){discard;}
+	// [PITFALL] 禁用 discard（D3D12+Intel Arc 会设备丢失），改存活遮罩
+	float alive=1.0;
+	if(age<delay || age-delay>lifetime || along<0.0 || along>span){alive=0.0;}
 	float q=clamp(UV.y,0.0,1.0);
 	float x=(UV.x-0.5)*4.0;
 	// A blunt penetrator with a broad shoulder, shaded flanks and separated
@@ -38,6 +40,6 @@ void fragment() {
 	float white_core=exp(-x*x*150.0)*nose;
 	float halo=exp(-x*x*3.5)*pow(max(0.0,1.0-q),2.0)*0.22;
 	float hot_tail=exp(-x*x*75.0)*smoothstep(0.2,0.35,q)*(1.0-smoothstep(0.45,1.0,q));
-	ALBEDO=(tint.rgb*(body*0.8+ribs*body*1.8+halo+hot_tail*0.55)+vec3(1.0,0.94,0.69)*(white_core*2.8+body*nose*0.5))*energy;
+	ALBEDO=(tint.rgb*(body*0.8+ribs*body*1.8+halo+hot_tail*0.55)+vec3(1.0,0.94,0.69)*(white_core*2.8+body*nose*0.5))*energy*alive;
 	ALPHA=1.0;
 }

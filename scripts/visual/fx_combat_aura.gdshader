@@ -48,9 +48,12 @@ void vertex() {
 	POSITION = PROJECTION_MATRIX * VIEW_MATRIX * vec4(pos, 1.0);
 }
 void fragment() {
+	// [PITFALL] 禁用 discard —— 见 fx_combat_band.gdshader 里的说明
+	//   （D3D12 + Intel Arc 上发散 discard 会导致设备丢失）。
+	float alive = 1.0;
 	float path_u = clamp((UV.y * (path_length + draw_width) - draw_width * 0.5) / max(path_length,0.001),0.0,1.0);
 	float t = age - delay - path_u * propagation_time;
-	if (t < 0.0 || t >= lifetime) { discard; }
+	if (t < 0.0 || t >= lifetime) { alive = 0.0; }
 	// A capsule-shaped optical footprint: every point ON the beam has exactly
 	// the same cross-section. Rounded falloff begins OUTSIDE its endpoints.
 	// This avoids a swollen middle and a half-energy pinch at either end.
@@ -68,7 +71,7 @@ void fragment() {
 	if (style == 2) {
 		if (finite_packet) {
 			float q = (t * packet_speed - along) / packet_length;
-			if (q < 0.0 || q > 1.0 || along < 0.0 || along > path_length) { discard; }
+			if (q < 0.0 || q > 1.0 || along < 0.0 || along > path_length) { alive = 0.0; }
 			wings *= smoothstep(0.0, 0.12, q) * (1.0 - smoothstep(0.20, 1.0, q));
 			envelope = 1.0;
 		} else {
@@ -81,6 +84,6 @@ void fragment() {
 		envelope *= smoothstep(t / lifetime - 0.20, t / lifetime + 0.18, UV.y);
 	}
 	// Unshaded color is written directly, including HDR values.
-	ALBEDO = tint.rgb * wings * envelope * energy;
+	ALBEDO = tint.rgb * wings * envelope * energy * alive;
 	ALPHA = 1.0;
 }

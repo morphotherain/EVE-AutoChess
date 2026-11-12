@@ -35,12 +35,14 @@ void vertex() {
 	MODELVIEW_NORMAL_MATRIX = mat3(MODELVIEW_MATRIX);
 }
 void fragment() {
+	// [PITFALL] 禁用 discard（D3D12+Intel Arc 会设备丢失），改存活遮罩
+	float alive = 1.0;
 	float t = age - delay;
-	if (t < 0.0 || t >= lifetime) { discard; }
+	if (t < 0.0 || t >= lifetime) { alive = 0.0; }
 	float k = t / lifetime;
 	float c = cos(rotation), s = sin(rotation);
 	vec2 p = mat2(vec2(c, s), vec2(-s, c)) * (UV - 0.5) + 0.5;
-	if (any(lessThan(p, vec2(0.0))) || any(greaterThan(p, vec2(1.0)))) { discard; }
+	if (any(lessThan(p, vec2(0.0))) || any(greaterThan(p, vec2(1.0)))) { alive = 0.0; }
 	float frame = mix(first_frame, last_frame, k);
 	float f0 = floor(frame), f1 = min(f0 + 1.0, 63.0), blend = fract(frame);
 	vec2 v0 = texture(flow_atlas, tile_uv(p, f0)).rg * 2.0 - 1.0;
@@ -61,6 +63,6 @@ void fragment() {
 	// each layer's radiance before salvos overlap, preserving orange detail.
 	float coverage = texel.a * smoothstep(0.10, 0.30, heat) * density * envelope;
 	vec3 radiance = fire * (0.25 + heat * 0.85) + ember * pow(heat, 2.0) * energy * 0.12;
-	ALBEDO = radiance * coverage * 0.70;
+	ALBEDO = radiance * coverage * 0.70 * alive;
 	ALPHA = 1.0;
 }

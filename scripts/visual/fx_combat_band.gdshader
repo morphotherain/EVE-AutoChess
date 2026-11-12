@@ -41,8 +41,15 @@ void vertex() {
 	POSITION = PROJECTION_MATRIX * VIEW_MATRIX * vec4(pos, 1.0);
 }
 void fragment() {
+	// [PITFALL] 这里**不能用 discard**。Godot 4.7 的 D3D12 后端会把 GLSL 的
+	//   discard 编成 DXIL 里的发散分支，Intel Arc（Xe2）上会让 EU 挂死 ⇒
+	//   DXGI_ERROR_DEVICE_REMOVED(0x887a0005) ⇒ 之后每帧几十条渲染错误、编辑器卡死。
+	//   官方 issue godotengine/godot#120857 / #118719，修复 PR #122994 未进 4.7.2。
+	//   本材质是 blend_add + depth_draw_never：把颜色压成 0 与 discard **视觉等价**
+	//   （src.rgb=0 ⇒ 加 0），所以用 alive 遮罩代替。
+	float alive = 1.0;
 	float t = age - delay - UV.y * propagation_time;
-	if (t < 0.0 || (style < 5 && t >= lifetime)) { discard; }
+	if (t < 0.0 || (style < 5 && t >= lifetime)) { alive = 0.0; }
 	float k = clamp(t / max(lifetime, 0.001), 0.0, 1.0);
 	float x = (UV.x - 0.5) * 2.0;
 	float ends = smoothstep(0.0, 0.012, UV.y) * (1.0 - smoothstep(0.985, 1.0, UV.y));
@@ -71,7 +78,7 @@ void fragment() {
 		float tail = smoothstep(0.05, 0.20, packet) * (1.0 - smoothstep(0.30, 0.85, packet));
 		if (finite_packet) {
 			float q = (t * packet_speed - UV.y * path_length) / packet_length;
-			if (q < 0.0 || q > 1.0) { discard; }
+			if (q < 0.0 || q > 1.0) { alive = 0.0; }
 			head = smoothstep(0.0, 0.12, q) * (1.0 - smoothstep(0.24, 0.85, q));
 			tail = smoothstep(0.0, 0.10, q) * (1.0 - smoothstep(0.12, 1.0, q));
 			fade = 1.0;
@@ -97,6 +104,6 @@ void fragment() {
 		radiance = tint.rgb * sheath * (segment * 0.65 + field * 0.35);
 	}
 	// Unshaded color is written directly, including HDR values.
-	ALBEDO = radiance * energy * fade * ends;
+	ALBEDO = radiance * energy * fade * ends * alive;
 	ALPHA = 1.0;
 }

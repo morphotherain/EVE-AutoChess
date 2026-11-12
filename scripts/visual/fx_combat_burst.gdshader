@@ -54,8 +54,12 @@ float noise(vec2 p) {
 }
 
 void fragment() {
+	// [PITFALL] 禁用 discard —— 见 fx_combat_band.gdshader 里的说明
+	//   （D3D12 + Intel Arc 上发散 discard 会导致设备丢失）。本材质是
+	//   blend_add + depth_draw_never，颜色压 0 与 discard 视觉等价。
+	float alive = 1.0;
 	float t = age - delay;
-	if (t < 0.0 || (shape < 4 && t >= lifetime)) { discard; }
+	if (t < 0.0 || (shape < 4 && t >= lifetime)) { alive = 0.0; }
 	float k = clamp(t / max(lifetime, 0.001), 0.0, 1.0);
 	vec2 p = UV * 2.0 - 1.0;
 	float r = length(p);
@@ -120,6 +124,6 @@ void fragment() {
 			(0.8 + 0.2 * sin(t * 5.0));
 	}
 	// Unshaded color is written directly, including HDR values.
-	ALBEDO = radiance * energy * fade * mask;
+	ALBEDO = radiance * energy * fade * mask * alive;
 	ALPHA = 1.0;
 }

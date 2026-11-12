@@ -70,14 +70,16 @@ void vertex() {
 	POSITION = PROJECTION_MATRIX * VIEW_MATRIX * vec4(pos, 1.0);
 }
 void fragment() {
+	// [PITFALL] 禁用 discard（D3D12+Intel Arc 会设备丢失），改存活遮罩
+	float alive = 1.0;
 	float t = age - delay;
-	if (t < 0.0 || t >= lifetime) { discard; }
+	if (t < 0.0 || t >= lifetime) { alive = 0.0; }
 	vec2 p = vec2(UV.y * path_length, (UV.x - 0.5) * width) / effect_scale;
 	vec2 footprint = fwidth(p);
 	vec3 light = glints(p, 0.0, t, footprint) + glints(p, 1.0, t, footprint) * 0.42;
 	float ends = smoothstep(0.0, 0.04, p.x) * smoothstep(0.0, 0.06, path_length / effect_scale - p.x);
 	float fade = smoothstep(0.0, 0.018, t);
 	if (miss_fraction < 0.999) { fade *= 1.0 - smoothstep(miss_fraction, 1.0, UV.y); }
-	ALBEDO = light * ends * fade;
+	ALBEDO = light * ends * fade * alive;
 	ALPHA = 1.0;
 }

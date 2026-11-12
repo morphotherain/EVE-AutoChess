@@ -20,12 +20,14 @@ vec2 tile(vec2 p, float frame) {
 	return (clamp(p, vec2(0.008), vec2(0.992)) + vec2(mod(frame, 8.0), floor(frame / 8.0))) / 8.0;
 }
 void fragment() {
+	// [PITFALL] 禁用 discard（D3D12+Intel Arc 会设备丢失），改存活遮罩
+	float alive = 1.0;
 	float t = age - delay;
-	if (t < 0.0 || t >= lifetime) { discard; }
+	if (t < 0.0 || t >= lifetime) { alive = 0.0; }
 	float k = t / lifetime;
 	float c = cos(seed), s = sin(seed);
 	vec2 p = mat2(vec2(c, s), vec2(-s, c)) * (UV - 0.5) + 0.5;
-	if (any(lessThan(p, vec2(0.0))) || any(greaterThan(p, vec2(1.0)))) { discard; }
+	if (any(lessThan(p, vec2(0.0))) || any(greaterThan(p, vec2(1.0)))) { alive = 0.0; }
 	float frame = mix(3.0, 18.0, k);
 	float f = floor(frame), blend = fract(frame);
 	vec2 v0 = texture(flow_atlas, tile(p, f)).rg * 2.0 - 1.0;
@@ -38,6 +40,6 @@ void fragment() {
 	vec3 light = mix(vec3(0.025, 0.13, 0.50), vec3(0.95, 0.48, 0.07), smoothstep(0.15, 0.85, heat));
 	light = mix(light, vec3(1.1, 1.05, 0.70), smoothstep(0.92, 1.0, heat));
 	float envelope = smoothstep(0.0, 0.018, t) * (1.0 - smoothstep(0.18, 0.85, k));
-	ALBEDO = light * pow(heat, 1.6) * coverage * envelope * 0.60;
+	ALBEDO = light * pow(heat, 1.6) * coverage * envelope * 0.60 * alive;
 	ALPHA = 1.0;
 }
