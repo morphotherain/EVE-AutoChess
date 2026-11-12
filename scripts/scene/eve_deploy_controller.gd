@@ -206,6 +206,10 @@ func _begin_drag_visual() -> void:
 func update_drag(pos: Vector2) -> void:
 	if drag.is_empty():
 		return
+	# Grabbing is distinct from a tap: wait for actual motion before sounding it.
+	if not bool(drag.get("audio_grabbed", false)) and not is_tap(pos):
+		drag["audio_grabbed"] = true
+		EveUiAudio.play("fleet.grab")
 	drag["screen"] = pos
 
 	var source := StringName(drag["source"])
@@ -476,6 +480,8 @@ func end_drag(pos: Vector2) -> bool:
 		var why := String(res.get("reason", ""))
 		if why != "":
 			_hud.append_log({"time": 0.0, "category": &"hint", "text": why})
+		elif _hud.bench_slot_at(pos) < 0:
+			EveUiAudio.play("fleet.invalid")
 
 	# 兜底再刷一次：RunState 的 changed 已经刷过一遍，这次是给
 	# 「动作被拒但界面仍需回正」（例如高亮、备战席 hover）收尾。

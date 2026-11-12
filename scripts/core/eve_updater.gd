@@ -113,7 +113,7 @@ func _ready() -> void:
 	set_process(false)
 	# [WHY] 网页版的包是站点直接分发的，不存在"本地热更"这回事；
 	#       而且跨域拉 49.233.138.141 会被 CORS 拦掉，刷一堆报错还白等两帧。
-	if OS.has_feature("web"):
+	if OS.has_feature("web") or OS.has_feature("editor"):
 		return
 	# 联网检查放两帧之后：让主菜单先把画面铺出来，别让启动像卡住。
 	await get_tree().process_frame
@@ -148,6 +148,10 @@ func _process(_delta: float) -> void:
 
 ## ── 挂载已下载的包（启动时唯一会被调用的地方）──────────────────
 func _try_mount() -> void:
+	# Source-tree runs must use the working tree. A downloaded player PCK can
+	# otherwise silently replace edited scripts/scenes during local previews.
+	if OS.has_feature("editor"):
+		return
 	if not FileAccess.file_exists(USER_PCK):
 		return
 

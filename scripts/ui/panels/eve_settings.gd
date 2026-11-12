@@ -582,6 +582,8 @@ func _tab_label(key: String) -> String:
 
 
 func _on_tab_pressed(key: String) -> void:
+	if key != _cur_tab:
+		EveUiAudio.play("ui.tab")
 	_show_tab(key)
 
 
@@ -638,6 +640,7 @@ func _sec_audio(t: VBoxContainer) -> void:
 		STORE.save_one("muted", on)
 		mute_toggled.emit(on)))
 	t.add_child(mute_row)
+
 
 
 ## ② 显示（分辨率 / 界面缩放 / 语言）—— 内容随平台变，见 `_build_display_rows`。

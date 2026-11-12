@@ -89,7 +89,11 @@ uniform vec3 emissive_color : source_color = vec3(1.0);
 uniform float emissive_energy : hint_range(0.0, 8.0) = 1.0;
 
 #include "res://scripts/visual/ship_hull_ramp.gdshaderinc"
+#include "res://scripts/visual/fx_hull_destruction.gdshaderinc"
 
+void vertex() {
+	death_local = (VERTEX - death_center) / max(death_extent, vec3(0.001));
+}
 
 void fragment() {
 	float spec = clamp(texture(spec_tex, UV).r * spec_gain + spec_bias, 0.0, 1.0);
@@ -111,5 +115,19 @@ void fragment() {
 	// 将来把 _e 接上之后，EveShipMaterial 会自动把 has_emissive 打开。
 	if (has_emissive) {
 		EMISSION = texture(emissive_tex, UV).rgb * emissive_color * emissive_energy;
+	}
+	if (death_active) {
+		vec3 p = death_local * 5.0 + vec3(death_seed);
+		vec2 cells = death_cells(p * 1.8);
+		float noise = death_noise(p * 2.0) * 0.67 + death_noise(p * 5.1) * 0.33;
+		float heat = smoothstep(0.10, 0.36, age);
+		float dissolve = smoothstep(0.34, 1.30, age);
+		float threshold = mix(-0.08, 1.08, dissolve);
+		if (noise < threshold) { discard; }
+		float cracks = exp(-pow(cells.y * 32.0, 2.0));
+		float edge = (1.0 - smoothstep(0.0, 0.075, noise - threshold)) * step(0.01, dissolve);
+		float hot = (cracks * 0.65 + edge * 1.5) * heat;
+		ALBEDO *= mix(1.0, 0.24, heat);
+		EMISSION += vec3(1.0, 0.18, 0.025) * hot * 3.0 + vec3(1.0,0.68,0.20) * pow(hot,3.0) * 1.2;
 	}
 }

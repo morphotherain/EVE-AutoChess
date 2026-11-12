@@ -14,6 +14,9 @@ class_name EveCombatCore
 ##   - 锁定时间：40000 / (scan_res * asinh(sig)^2)
 
 const DAMAGE_TYPES := 4
+## Local heavy-missile launch/arrival timing shared by combat and presentation.
+const MISSILE_COAST_TIME := 0.34
+const MISSILE_IGNITION_TIME := 0.24
 const LAYERS: Array[StringName] = [&"shield", &"armor", &"hull"]
 
 ## 伤害类型索引（与 EVE 一致）
@@ -235,6 +238,13 @@ static func turret_hit_quality(chance_to_hit: float, roll: float) -> Dictionary:
 	return {"hit": true, "quality": quality, "multiplier": multiplier}
 
 
+## Local presentation/settlement timing, not an original EVE server rule.
+static func missile_flight_duration(distance_meters: float) -> float:
+	# Keep arrival independent of the cold-ejection stage: earlier ignition
+	# leaves more powered travel without pulling the existing damage forward.
+	return 0.48 + clampf(distance_meters / 17000.0 + 0.30, 0.80, 1.35)
+
+
 ## 导弹伤害应用（爆炸半径 / 爆炸速度 / 信号半径 三方取最小）
 static func missile_application(explosion_radius: float, explosion_velocity: float,
 		damage_reduction_factor: float, target_signature: float, target_speed: float) -> float:
@@ -289,6 +299,7 @@ static func apply_damage(hp: Dictionary, resists: Dictionary, amount: float,
 	applied_by_type.fill(0.0)
 	var mix := normalize_damage_profile(profile)
 	var breaks: Array[StringName] = []
+	var applied_by_layer: Dictionary = {}
 	var pierce := clampf(armor_pierce, 0.0, 0.95)
 	# 穿盾时把护盾层挪到队尾 ⇒ 顺序变成 armor → hull → shield。
 	# ⚠️ 用「重排」而不是「跳过」：万一装甲/结构都空了，剩下那点伤害还能落到护盾，
@@ -327,12 +338,14 @@ static func apply_damage(hp: Dictionary, resists: Dictionary, amount: float,
 			hp[layer] = 0.0
 			remaining = maxf(0.0, remaining - used)
 			applied += current
+			applied_by_layer[layer] = current
 			breaks.append(layer)
 		else:
 			for i in DAMAGE_TYPES:
 				applied_by_type[i] += remaining * factors[i]
 			hp[layer] = current - available
 			applied += available
+			applied_by_layer[layer] = available
 			remaining = 0.0
 
 	return {
@@ -340,6 +353,7 @@ static func apply_damage(hp: Dictionary, resists: Dictionary, amount: float,
 		"applied_by_type": applied_by_type,
 		"remaining": remaining,
 		"breaks": breaks,
+		"applied_by_layer": applied_by_layer,
 	}
 
 

@@ -1518,9 +1518,9 @@ func _build_pause_veil() -> Control:
 ##
 ## ⚠️ 屏幕坐标由**场景侧**算好传进来（`arena.world_to_screen`），
 ##    HUD 不认识 3D 世界，不该在这里反向依赖相机。
-func pop_damage(screen_pos: Vector2, damage: float, quality: int, hit: bool) -> void:
+func pop_damage(screen_pos: Vector2, damage: float, quality: int, hit: bool, event: Dictionary = {}) -> void:
 	if damage_feed and damage_feed.has_method("pop"):
-		damage_feed.call("pop", screen_pos, damage, quality, hit)
+		damage_feed.call("pop", screen_pos, damage, quality, hit,event)
 
 
 func clear_damage() -> void:

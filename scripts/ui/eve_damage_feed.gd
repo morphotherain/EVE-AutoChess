@@ -1,165 +1,148 @@
 extends Control
-## ★ 字号缩放（2026-10-07）：自绘文字的字号也要过它（`FONT.s(设计字号)`）。
+
 const FONT := preload("res://scripts/ui/eve_font.gd")
-
-## EVE 自走棋 —— 伤害数字层（阶段 D）
-##
-## ══════════════════════════════════════════════════════════════════
-##  它是什么，以及为什么不做成 3D 飘字
-## ══════════════════════════════════════════════════════════════════
-##  战斗反馈分两层，刻意分家（与 `eve_battle_fx.gd` 的分工）：
-##    · **世界空间**（`EveBattleFx`）：曳光、命中爆点、击毁爆炸 ——
-##      这些东西「发生在某个位置」，随相机远近缩放是对的。
-##    · **屏幕空间**（本文件）：伤害**数字** ——
-##      数字是给人读的，必须恒定字号。挂在世界空间里的 Label3D 会随相机
-##      推近而糊满屏、拉远而变成一排小点，两头都读不出来。
-##
-##  ── 为什么数字要「往上飘 + 淡出」而不是原地闪 ─────────────────────
-##  集火时同一艘船一秒能挨五六下。原地闪的话数字会叠成一坨黑块。
-##  往上飘让「后来的数字压在先来的上面」，再叠一个随机横向抖动，
-##  同一时刻的多个数字就读得出来 —— 这也是云顶/暗黑的通行做法。
-##
-## ── 为什么数量上限是硬的 ──────────────────────────────────────────
-##    6v6、30Hz 开火，峰值每秒几十条。无上限的话每帧在 add/remove 上百个
-##    Label，无头验收会明显变慢（实测过），实机上直接掉帧。
-##    超过上限时**丢最老的**：刚打出的那一下永远是玩家最该看到的。
-##
-## ⚠️ 这一层铺满全屏且 `mouse_filter = IGNORE` —— 它绝不能吃掉鼠标事件，
-##    否则商店/棋盘的点击会被一层看不见的东西挡住（症状是「哪儿都点不动」）。
-
-## 单条飘字的存活时间（秒）
+const TYPEFACE := preload("res://assets/fonts/NotoSansSC-Regular.ttf")
+const DIGITS := preload("res://scripts/ui/eve_damage_glyphs.gd")
 const LIFE := 0.85
-## 存活上限（超过就丢最老的）
 const MAX_POPUPS := 48
-## 同屏同位置的横向散开半径（像素）
-const JITTER_X := 26.0
-## 一个数字最多占多少像素宽 —— 超过就压缩，防止 BOSS 暴击的 5 位数糊出屏幕
-const MAX_TEXT_W := 92.0
-
-## 正在飘的：元素 = {
-##   "pos": Vector2（起始屏幕坐标）, "t": float, "life": float,
-##   "text": String, "color": Color, "size": int, "dx": float, "crit": bool }
+const MAX_TEXT_W := 170.0
 var _popups: Array[Dictionary] = []
-
+var _lanes: Dictionary = {}
+var paused := false
+var playback_rate := 1.0
 
 func _ready() -> void:
-	# ⚠️ 三件缺一不可（缺了就是「看不见 / 点不动」这类静默事故）：
-	#    ① 铺满视口 —— 否则 size 为 0，draw 什么都不画；
-	#    ② IGNORE —— 飘字层绝不能抢鼠标；
-	#    ③ 不在 _process 里 queue_redraw 之外做任何事 —— 它有 48 条上限。
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mouse_filter=Control.MOUSE_FILTER_IGNORE
+	texture_filter=CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
-
-## 当前活跃飘字数（验收断言用）
 func active_count() -> int:
 	return _popups.size()
 
-
-## 清空（重开一局 / 进准备阶段时调）
 func clear() -> void:
 	_popups.clear()
+	_lanes.clear()
 	queue_redraw()
 
+func set_timing(is_paused: bool,rate: float=1.0) -> void:
+	paused=is_paused
+	playback_rate=maxf(0.0,rate)
 
-## 冒一个伤害数字。
-##
-## 参数：
-##   screen_pos  世界坐标换算出来的**屏幕**位置（由主控调 arena.world_to_screen）
-##   damage      实际伤害值；<= 0 且 hit 为真时也算有效（护盾吃完的零头）
-##   quality     EveCombatCore.HitQuality 档位
-##   hit         false = 未命中（显示 miss 而不是 0）
-func pop(screen_pos: Vector2, damage: float, quality: int, hit: bool) -> void:
-	var text := ""
-	var color := Color(0.70, 0.82, 0.86)
-	var size := 13
-	var crit := false
+static func event_kind(event: Dictionary) -> StringName:
+	var breaks:Array=event.get("breaks",[])
+	if breaks.has(&"hull"): return &"kill"
+	if breaks.has(&"armor"): return &"armor"
+	if breaks.has(&"shield"): return &"shield"
+	return &"pierce" if event.get("pierced",false) else &"hit"
 
-	if not hit:
-		text = "miss"
-		color = Color(0.48, 0.55, 0.58)
-		size = 11
-	elif damage < 1.0:
-		# 打中了但这一层已经被吃干（护盾见底时常见）—— 报小数字而不是 0
-		text = "%d" % int(round(maxf(1.0, damage)))
-		color = Color(0.52, 0.62, 0.68)
-	else:
-		text = "%d" % int(round(damage))
-		# 配色跟打击特效同一套口径（见 EveBattleFx.QUALITY_COLORS）
-		match clampi(quality, 0, 6):
-			1: color = Color(0.62, 0.70, 0.72)
-			2: color = Color(0.70, 0.82, 0.86)
-			3: color = Color(0.55, 0.78, 0.82)
-			4: color = Color(0.35, 0.70, 0.90)
-			5:
-				color = Color(0.85, 0.68, 0.28)
-				size = 16
-			6:
-				color = Color(0.95, 0.45, 0.30)
-				size = 18
-				crit = true
-		# 致命一击（击毁前那一下）用金色描边挑出来
-		if quality >= 5:
-			crit = true
-
-	while _popups.size() >= MAX_POPUPS:
-		_popups.pop_front()
-
-	_popups.append({
-		"pos": screen_pos,
-		"t": 0.0,
-		"life": LIFE,
-		"text": text,
-		"color": color,
-		"size": size,
-		"dx": randf_range(-JITTER_X, JITTER_X),
-		"crit": crit,
-	})
+func pop(screen_pos: Vector2,damage: float,quality: int,hit: bool,event: Dictionary={}) -> void:
+	var kind:StringName=event_kind(event) if hit else &"miss"
+	var target_id:int=event.get("target_id",-1)
+	# Sum ordinary simultaneous damage only. Breaks and kills keep one true total.
+	if kind==&"hit" and quality<5 and target_id>=0:
+		for previous in _popups:
+			if previous.target_id==target_id and previous.kind==&"hit" and previous.quality<5 and previous.t<0.075:
+				previous.damage+=damage
+				previous.count+=1
+				previous.bump=0.0
+				queue_redraw()
+				return
+	var milestones:Array[StringName]=[]
+	for layer in [&"shield",&"armor",&"hull"]:
+		if event.get("breaks",[]).has(layer): milestones.append(layer)
+	var important:=not milestones.is_empty()
+	while _popups.size()>=MAX_POPUPS:
+		var discard:=0
+		for i in range(_popups.size()):
+			if _popups[i].milestones.is_empty():
+				discard=i
+				break
+		_popups.remove_at(discard)
+	var lane:int=_lanes.get(target_id,0)
+	_lanes[target_id]=(lane+1)%3
+	_popups.append({"pos":screen_pos,"t":0.0,"bump":0.0,"life":1.10 if kind==&"kill" else (0.98 if important else 0.70),
+		"damage":damage,"count":1,"kind":kind,"quality":quality,"target_id":target_id,
+		"target_visual":event.get("target_visual"),"milestones":milestones,
+		"dx":float(lane-1)*(9.0 if important else 14.0)})
 	queue_redraw()
-
 
 func _process(delta: float) -> void:
-	if _popups.is_empty():
-		return
-	var alive: Array[Dictionary] = []
-	for p in _popups:
-		p["t"] = float(p["t"]) + delta
-		if float(p["t"]) < float(p["life"]):
-			alive.append(p)
-	_popups = alive
+	if paused or _popups.is_empty(): return
+	var dt:=delta*playback_rate
+	var camera:=get_viewport().get_camera_3d()
+	for i in range(_popups.size()-1,-1,-1):
+		var p:=_popups[i]
+		p.t+=dt
+		p.bump+=dt
+		if p.t>=p.life:
+			_popups.remove_at(i)
+			continue
+		var reference=p.target_visual
+		var visual=reference.get_ref() if reference is WeakRef else null
+		if is_instance_valid(visual) and camera!=null:
+			p.pos=visual.feedback_screen_position(camera)
 	queue_redraw()
 
+func _number(value: float) -> String:
+	return String.num(value,1) if value>0.0 and value<1.0 else str(int(round(value)))
 
 func _draw() -> void:
-	if _popups.is_empty():
-		return
-	var font := ThemeDB.fallback_font
 	for p in _popups:
-		var k: float = clampf(float(p["t"]) / float(p["life"]), 0.0, 1.0)
-		# 上升：先快后慢（起手一冲，然后缓下来）—— 匀速上升看起来像吊线木偶
-		var rise := (1.0 - pow(1.0 - k, 2.0)) * 34.0
-		# 淡出只占寿命的后半段：前半段必须全不透明，否则小数字看不清
-		var alpha := 1.0 if k < 0.5 else (1.0 - (k - 0.5) / 0.5)
-		var col: Color = p["color"]
-		col.a = alpha
-		var at := (p["pos"] as Vector2) + Vector2(float(p["dx"]) * k, -rise)
-		# ★ 字号缩放：在这里收口 ⇒ 下面的测量、描边、收缩到 MAX_TEXT_W 全都跟着变
-		var fs: int = FONT.s(int(p["size"]))
-		var txt: String = p["text"]
-		var w := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-		if w > MAX_TEXT_W:
-			fs = maxi(9, int(float(fs) * MAX_TEXT_W / w))
-			w = font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-		var origin := at - Vector2(w * 0.5, 0.0)
-		# 描边：亮星云背景下没有描边的数字会整条消失（不是变淡，是彻底看不见）
-		var outline := Color(0.02, 0.03, 0.04, alpha * 0.92)
-		for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
-			font.draw_string(get_canvas_item(), origin + o, txt,
-					HORIZONTAL_ALIGNMENT_LEFT, -1, fs, outline)
-		font.draw_string(get_canvas_item(), origin, txt,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
-		if bool(p["crit"]):
-			# 重击：底部补一道短横线，和普通数字拉开「这一下很疼」的区分度
-			var y := at.y + 3.0
-			draw_line(Vector2(origin.x, y), Vector2(origin.x + w, y),
-					Color(col.r, col.g, col.b, alpha * 0.55), 1.0)
+		var important:bool=not p.milestones.is_empty()
+		var tint:=Color(0.88,0.96,1.0)
+		if p.kind==&"shield": tint=Color(0.44,0.88,1.0)
+		elif p.kind==&"armor": tint=Color(1.0,0.78,0.32)
+		elif p.kind==&"kill": tint=Color(1.0,0.45,0.19)
+		elif p.quality>=5: tint=Color(1.0,0.87,0.48)
+		var text:String="miss" if p.kind==&"miss" else _number(p.damage)
+		var fs:=float(FONT.s(32 if important else (28 if p.quality>=5 else 23)))
+		var width:=DIGITS.measure(text,fs)
+		if width>MAX_TEXT_W:
+			fs*=MAX_TEXT_W/width
+			width=MAX_TEXT_W
+		var alpha:float=1.0-smoothstep(p.life*0.62,p.life,p.t)
+		var rise:float=6.0*(1.0-exp(-p.t*24.0))+smoothstep(0.12,p.life,p.t)*(38.0 if important else 27.0)
+		var punch:float=1.0+(0.23 if important else 0.12)*sin(PI*clampf(p.bump/0.15,0.0,1.0))
+		var icon_width:float=float(p.milestones.size())*22.0
+		var at:Vector2=p.pos+Vector2(p.dx,-rise)
+		draw_set_transform(at,0.0,Vector2.ONE*punch)
+		var start:=Vector2(-(width+icon_width)*0.5,0)
+		if p.kind==&"miss":
+			TYPEFACE.draw_string(get_canvas_item(),start,text,HORIZONTAL_ALIGNMENT_LEFT,-1,int(fs*0.65),Color(tint.r,tint.g,tint.b,alpha))
+		else:
+			DIGITS.paint(self,text,start+Vector2(icon_width,0),fs,Color(tint.r,tint.g,tint.b,alpha),p.bump)
+		for i in range(p.milestones.size()):
+			_symbol(p.milestones[i],start+Vector2(10.0+float(i)*22.0,-fs*0.48),p.t-float(i)*0.035,alpha)
+		draw_set_transform(Vector2.ZERO)
+
+func _symbol(kind: StringName,at: Vector2,t: float,alpha: float) -> void:
+	if t<0.0: return
+	var split:=smoothstep(0.03,0.20,t)
+	var tint:=Color(0.30,0.77,1.0,alpha)
+	if kind==&"shield":
+		for side in [-1.0,1.0]:
+			var offset:=at+Vector2(side*split*3.5,split*1.5)
+			var points:=PackedVector2Array([Vector2(0,-9),Vector2(side*7,-6),Vector2(side*6,2),Vector2(0,9),Vector2(side,-1),Vector2(0,-9)])
+			for i in range(points.size()): points[i]+=offset
+			draw_colored_polygon(points,Color(tint.r,tint.g,tint.b,alpha*0.12))
+			draw_polyline(points,tint,1.7,true)
+		draw_line(at+Vector2(-1,-4),at+Vector2(2,1),Color(0.9,1,1,alpha*(1.0-split)),1.5,true)
+	elif kind==&"armor":
+		tint=Color(1.0,0.72,0.24,alpha)
+		var parts=[PackedVector2Array([Vector2(-7,-7),Vector2(0,-9),Vector2(-1,0),Vector2(-7,3)]),
+			PackedVector2Array([Vector2(1,-9),Vector2(7,-6),Vector2(7,1),Vector2(0,0)]),
+			PackedVector2Array([Vector2(-6,4),Vector2(0,1),Vector2(6,3),Vector2(0,9)])]
+		for i in range(parts.size()):
+			var points:PackedVector2Array=parts[i]
+			var shift:Vector2=[Vector2(-3,-1),Vector2(3,-1),Vector2(0,3)][i]*split
+			for j in range(points.size()): points[j]+=at+shift
+			draw_colored_polygon(points,Color(tint.r,tint.g,tint.b,alpha*0.30))
+			points.append(points[0])
+			draw_polyline(points,tint,1.4,true)
+	else:
+		tint=Color(1.0,0.43,0.19,alpha)
+		var diamond:=PackedVector2Array([at+Vector2(0,-7),at+Vector2(5,0),at+Vector2(0,7),at+Vector2(-5,0),at+Vector2(0,-7)])
+		draw_polyline(diamond,tint,2.0,true)
+		for i in range(4):
+			var direction:=Vector2.from_angle(float(i)*PI*0.5+PI*0.25)
+			draw_line(at+direction*(8.0+split*2.0),at+direction*(11.0+split*4.0),tint,1.5,true)

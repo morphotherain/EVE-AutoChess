@@ -1,2 +1,8 @@
 # Normalize EOL for all files that Git considers text files.
 * text=auto eol=lf
+
+# Imported/generated geometry and baked effect data; keep PR review on authored code.
+assets/vfx/combat/hull_locators.json linguist-generated=true
+assets/vfx/combat/electronic/electronic_assets.gd linguist-generated=true
+assets/vfx/combat/scourge/scourge_source.gd linguist-generated=true
+assets/vfx/combat/**/*.obj linguist-generated=true

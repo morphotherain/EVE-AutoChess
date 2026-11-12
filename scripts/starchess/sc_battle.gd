@@ -63,6 +63,7 @@ func _ready() -> void:
 	_build()
 	_refresh_shop()
 	_refresh_all()
+	EveUiAudio.play("round.prep")
 
 
 func _build() -> void:
@@ -349,6 +350,7 @@ func _refresh_hand() -> void:
 
 func _on_buy(idx: int) -> void:
 	if _energy < SHIP_COST:
+		EveUiAudio.play("shop.insufficient")
 		_log("能量不足（需要 %d）" % SHIP_COST)
 		return
 	var card: Node = _shop_holder.get_child(idx) if idx < _shop_holder.get_child_count() else null
@@ -359,6 +361,7 @@ func _on_buy(idx: int) -> void:
 		return
 	_energy -= SHIP_COST
 	_hand.append(data.duplicate())
+	EveUiAudio.play("shop.buy")
 	_log("购入 %s" % str(data.get("name", "")))
 	_refresh_all()
 
@@ -368,23 +371,28 @@ func _on_reroll() -> void:
 		_free_rerolls -= 1
 	else:
 		if _energy < REROLL_COST:
+			EveUiAudio.play("shop.insufficient")
 			_log("能量不足（刷新需要 %d）" % REROLL_COST)
 			return
 		_energy -= REROLL_COST
 	_refresh_shop()
 	_refresh_all()
+	EveUiAudio.play("shop.refresh")
 
 
 func _on_upgrade() -> void:
 	var cost := _level_cost()
 	if cost < 0:
+		EveUiAudio.play("ui.reject")
 		_log("已满级")
 		return
 	if _energy < cost:
+		EveUiAudio.play("shop.insufficient")
 		_log("能量不足（升级需要 %d）" % cost)
 		return
 	_energy -= cost
 	_level += 1
+	EveUiAudio.play("shop.upgrade")
 	_log("指挥官升级 → Lv%d" % _level)
 	_refresh_all()
 
@@ -404,22 +412,26 @@ func _on_deploy(idx: int) -> void:
 		if str(u.get("id", "")) == str(c.get("id", "")):
 			u["level"] = int(u.get("level", 1)) + MERGE_BONUS
 			_hand.remove_at(idx)
+			EveUiAudio.play("fleet.merge")
 			_log("合流 %s +%d 级" % [str(c.get("name", "")), MERGE_BONUS])
 			_refresh_all()
 			return
 	if _units.size() >= _cap():
+		EveUiAudio.play("fleet.invalid")
 		_log("上阵已满（%d）" % _cap())
 		return
 	var u := c.duplicate()
 	u["level"] = 1
 	_units.append(u)
 	_hand.remove_at(idx)
+	EveUiAudio.play("fleet.deploy")
 	_log("上阵 %s" % str(c.get("name", "")))
 	_refresh_all()
 
 
 ## 开战：本轮结算（战斗表现后续接），然后进下一回合。
 func _on_battle() -> void:
+	EveUiAudio.play("round.battle")
 	var power := 0
 	for u in _units:
 		power += int(u.get("atk", 0)) * int(u.get("level", 1))
@@ -431,14 +443,22 @@ func _on_battle() -> void:
 			_life[i] = int(_life[i]) - 4
 	if power < 60:
 		_life[0] = int(_life[0]) - 6
+		EveUiAudio.play("round.lose")
+		EveUiAudio.play("round.damage")
+	else:
+		EveUiAudio.play("round.win")
 	if int(_life[0]) <= 0:
 		get_tree().change_scene_to_file("res://scenes/starchess/sc_over.tscn")
 		return
 	_round += 1
+	var energy_before := _energy
 	_energy = mini(ENERGY_CAP, _energy + ENERGY_PER_ROUND)
+	if _energy > energy_before:
+		EveUiAudio.play("economy.income")
 	_free_rerolls = 1
 	_refresh_shop()
 	_refresh_all()
+	EveUiAudio.play("round.prep")
 
 
 func _log(msg: String) -> void:

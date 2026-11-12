@@ -194,6 +194,7 @@ var _last_variant: Dictionary = {}
 var _count := {
 	"fire": 0, "hit": 0, "boom": 0, "amb": 0, "cue": 0, "music": 0, "missing": 0,
 	"fire_throttled": 0, "hit_throttled": 0, "boom_throttled": 0,
+	"break":0,
 }
 
 ## 总音量（0~1）。1.0 = 不额外衰减，分档音量原样生效。
@@ -633,6 +634,41 @@ func play_boom() -> void:
 	_count["boom"] += 1
 
 
+func play_layer_break(layer: StringName) -> void:
+	if sfx_off() or not [&"shield",&"armor"].has(layer): return
+	var key:="break_"+String(layer)
+	if _throttle(key,0.08,2): return
+	if not _sfx_bank.has(key):
+		_sfx_bank[key]=[_break_transient(layer)]
+	if _play_from(_sfx_bank,key,_sfx_players,1.0,1.0,false):
+		_count["break"]+=1
+
+
+func _break_transient(layer: StringName) -> AudioStreamWAV:
+	# Short original confirmation layers: inharmonic glass for shield collapse,
+	# lower damped metal for armor. Generated once, through the existing SFX bus.
+	var rate:=22050
+	var length:=0.28 if layer==&"shield" else 0.24
+	var bytes:=PackedByteArray()
+	bytes.resize(int(rate*length)*2)
+	var partials:Array=[760.0,1120.0,1710.0,2290.0] if layer==&"shield" else [210.0,337.0,510.0,780.0]
+	for i in range(bytes.size()/2):
+		var t:=float(i)/rate
+		var value:=0.0
+		for j in range(partials.size()):
+			value+=sin(TAU*partials[j]*t)*exp(-t*(19.0+float(j)*7.0))*0.16
+		var noise:=fposmod(sin(float(i)*12.9898+78.233)*43758.5453,1.0)*2.0-1.0
+		value+=noise*exp(-t*95.0)*0.25
+		value+=sin(TAU*(120.0 if layer==&"shield" else 82.0)*t)*exp(-t*18.0)*0.24
+		value*=smoothstep(0.0,0.0015,t)*(1.0-smoothstep(length-0.035,length,t))
+		bytes.encode_s16(i*2,int(clampf(value,-0.95,0.95)*18000.0))
+	var stream:=AudioStreamWAV.new()
+	stream.format=AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate=rate
+	stream.data=bytes
+	return stream
+
+
 ## 品质档 -> 开火音色族。
 ##
 ## 类比 EVE 的武器谱系：低档 = 小型速射（清脆）、高档 = 大型炮（沉）。
@@ -683,6 +719,13 @@ func _hit_key(quality: int, layer: StringName = &"") -> String:
 func play_phase(phase: int) -> void:
 	if sfx_off():
 		return
+	var selected_ui := get_node_or_null("/root/EveUiAudio")
+	if selected_ui != null and selected_ui.handles("round.prep"):
+		if phase == 0 or phase == 1:
+			if selected_ui.play("round.prep" if phase == 0 else "round.battle"):
+				_count["amb"] += 1
+		# Resolve/ending have explicit win/lose events, not a second generic cue.
+		return
 	var key := ""
 	match phase:
 		0:
@@ -721,6 +764,11 @@ const COUNT_VOICE_DB := 7.0
 func play_tick(seconds_left: int) -> void:
 	if sfx_off():
 		return
+	var selected_ui := get_node_or_null("/root/EveUiAudio")
+	if selected_ui != null and selected_ui.handles("round.tick"):
+		if selected_ui.play("round.urgent" if seconds_left <= 5 else "round.tick"):
+			_count["amb"] += 1
+		return
 	var urgent := seconds_left <= 5
 	var key := "tick_urgent" if urgent else "tick"
 	var vol := TICK_URGENT_DB if urgent else 0.0
@@ -737,6 +785,11 @@ func play_tick(seconds_left: int) -> void:
 func play_countdown(n: int) -> void:
 	if sfx_off():
 		return
+	var selected_ui := get_node_or_null("/root/EveUiAudio")
+	if selected_ui != null and selected_ui.handles("round.count1"):
+		if selected_ui.play("round.count%d" % clampi(n, 1, 3)):
+			_count["amb"] += 1
+		return
 	var key := "count_%d" % clampi(n, 1, 3)
 	if _play_from(_amb_bank, key, _amb_players, 1.0, 1.0, false, COUNT_VOICE_DB):
 		_count["amb"] += 1
@@ -752,6 +805,9 @@ func play_countdown(n: int) -> void:
 func play_resolve() -> void:
 	if sfx_off():
 		return
+	var selected_ui := get_node_or_null("/root/EveUiAudio")
+	if selected_ui != null and selected_ui.handles("round.win"):
+		return  # Outcome-specific feedback is emitted by the completed transaction.
 	if _play_from(_amb_bank, "resolve", _amb_players, 1.0, 1.0, false):
 		_count["amb"] += 1
 	else:
@@ -760,6 +816,11 @@ func play_resolve() -> void:
 
 func play_node_advance() -> void:
 	if sfx_off():
+		return
+	var selected_ui := get_node_or_null("/root/EveUiAudio")
+	if selected_ui != null and selected_ui.handles("run.next"):
+		if selected_ui.play("run.next"):
+			_count["amb"] += 1
 		return
 	if _play_from(_amb_bank, "node", _amb_players, 1.0, 1.0, false):
 		_count["amb"] += 1

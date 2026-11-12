@@ -1,0 +1,463 @@
+{
+  "importer": "tools/pipeline/import_electronic_fx.mjs",
+  "effects": [
+    {
+      "label": "suppression",
+      "uri": "res:/fisfx/module/sensordampener_st_t1a.black",
+      "cacheRelativePath": "32/32fed1f0f70044f0_42155100647a27f299472923a32a3e57",
+      "sha256": "772be96dd7c78f14f830d22d42a9bdfabde5b27c1433df0130a5c8569b55dd85"
+    },
+    {
+      "label": "jam",
+      "uri": "res:/dx9/model/turret/structure/utilityc/utilityc_ecm_t1_fx.black",
+      "cacheRelativePath": "80/802d46abe1bc1f12_ca62402c94c7214e7c25b1b3372af9d1",
+      "sha256": "546243daa2cdf3f5662e4d9e0f78ac72bd3db612d5548cac1e5a71a520b1abc1"
+    },
+    {
+      "label": "jam_reference",
+      "uri": "res:/fisfx/module/ecm_tr_t1a.black",
+      "cacheRelativePath": "b3/b30c81d9ce427648_384f3bcf23ebbf19845a7296fbc35d0d",
+      "sha256": "b4e091574130e8bdc200ca571a28c4469df7143f8e7f686947e8cd083028e02f"
+    },
+    {
+      "label": "painter_link",
+      "uri": "res:/dx9/model/turret/structure/utilityc/utilityc_targetpainter_t1_fx.black",
+      "cacheRelativePath": "55/55dfe91ee4bf9ea7_2b5d0f537bbd131e3db76acc44f6fd2b",
+      "sha256": "f88eafc2900c96fb94f633f50907f0c3eef0140ba295c20370051a1cd16c292a"
+    },
+    {
+      "label": "tractor_link",
+      "uri": "res:/dx9/model/turret/tractor/s/tractor_s_fx.black",
+      "cacheRelativePath": "75/75d43f373b4977da_d5c294ef7b4b1ec13635f592118d6bad",
+      "sha256": "73af2fdbecbca3e2fb29bf76b60e785da4253f812c913e671768a0bbe7c30377"
+    }
+  ],
+  "geometry": [
+    {
+      "uri": "res:/graphics/generic/vortex/cone2_fixeduvs_highdetail.gr2",
+      "file": "geometry/cone2_fixeduvs_highdetail.json",
+      "cacheRelativePath": "18/18f71acdf74f21fe_de2f05010c21dacc2b925b179d89b6b1",
+      "sha256": "edfcc7e4fd7de4cf9b1a3233a21374037d113f77190875776f039c4c2aa80f1e",
+      "outputSHA256": "6d33c6ab189d04f446cfb49313cdad46ba49b1336213d8eb55d45c2c7e7e0dbe",
+      "meshIndex": 0,
+      "meshName": "pCylinderShape1",
+      "omittedLODMeshNames": [
+        "pCylinderShape1 LOD 80",
+        "pCylinderShape1 LOD 40",
+        "pCylinderShape1 LOD 20",
+        "pCylinderShape1 LOD 10"
+      ]
+    },
+    {
+      "uri": "res:/graphics/generic/unit_plane.gr2",
+      "file": "geometry/unit_plane.json",
+      "cacheRelativePath": "52/52ec9dd1a9e34e44_238fdf7d1f76dfc7812f22e5aea40135",
+      "sha256": "5dba24efbf143c010cb086b28288099b76bd19b5a164b98c2900b5d50ff95950",
+      "outputSHA256": "f754c0e11e0a6293a6e97fa1fd076e4bdd79e9ffc3f08c76a3561f16c5088835",
+      "meshIndex": 0,
+      "meshName": "pPlaneShape1",
+      "omittedLODMeshNames": []
+    },
+    {
+      "uri": "res:/graphics/generic/vortex/tube_bulge_01.gr2",
+      "file": "geometry/tube_bulge_01.json",
+      "cacheRelativePath": "a0/a0d978469df5e120_003de5347954791d2ac41829459bddb7",
+      "sha256": "529311b6c15722609be7160f3afc154672b302d1ab3e892782a56f39052914a2",
+      "outputSHA256": "0137f82a37f62a3242ee1c057a4f1f4f637751a2a22f5ea30c00554e59dfcc10",
+      "meshIndex": 0,
+      "meshName": "polySurfaceShape2",
+      "omittedLODMeshNames": [
+        "polySurfaceShape2 LOD 40",
+        "polySurfaceShape2 LOD 20",
+        "polySurfaceShape2 LOD 10"
+      ]
+    },
+    {
+      "uri": "res:/graphics/generic/vortex/vortex5.gr2",
+      "file": "geometry/vortex5.json",
+      "cacheRelativePath": "b7/b7cb42ed891e5edd_e860ef9896af46eb7884df3f950b1997",
+      "sha256": "ca9b6f5905d522a01f9044213d34016e1b45b8bee7cb114d605bfddf0f3be96a",
+      "outputSHA256": "e9887f5fe34476e75801c9d721df1d56a87702f8c3cf0b27e6b5d347ef675d4e",
+      "meshIndex": 0,
+      "meshName": "pCylinderShape1",
+      "omittedLODMeshNames": [
+        "pCylinderShape1 LOD 80",
+        "pCylinderShape1 LOD 40",
+        "pCylinderShape1 LOD 20"
+      ]
+    },
+    {
+      "uri": "res:/graphics/generic/custom/halo_01_wided.gr2",
+      "file": "geometry/halo_01_wided.json",
+      "cacheRelativePath": "14/1463a2154eac1d3f_886ec9fe8928df9292e9ebac935baada",
+      "sha256": "627cab0277db25cdcb347f36fe92dc8bfac6d6d315a3a78b73e55450eefa2ff6",
+      "outputSHA256": "ccb166f13c1399867b58ecc97dbc7e766759bf4c5e5615745e7e02287cac174d",
+      "meshIndex": 0,
+      "meshName": "polySurface3Shape",
+      "omittedLODMeshNames": [
+        "polySurface3Shape LOD 80",
+        "polySurface3Shape LOD 40",
+        "polySurface3Shape LOD 20",
+        "polySurface3Shape LOD 10"
+      ]
+    },
+    {
+      "uri": "res:/graphics/generic/vortex/vortex_2sided.gr2",
+      "file": "geometry/vortex_2sided.json",
+      "cacheRelativePath": "9a/9ad3a3d4a4adea26_bd1ac10cd6f29a6a1a224efa290308a0",
+      "sha256": "18107578d4f3f63890830f213bd38dbfaabe7367a72fab58e99b6b21b5cdb1ee",
+      "outputSHA256": "9f403b0b0e231d94dbb6dd5206ac27cc01b1c7cc72fd66c54a1d381bc34ecdbe",
+      "meshIndex": 0,
+      "meshName": "pCylinderShape1Shape",
+      "omittedLODMeshNames": [
+        "pCylinderShape1Shape LOD 80",
+        "pCylinderShape1Shape LOD 40",
+        "pCylinderShape1Shape LOD 20",
+        "pCylinderShape1Shape LOD 10"
+      ]
+    },
+    {
+      "uri": "res:/graphics/generic/vortex/tube_bulge_02.gr2",
+      "file": "geometry/tube_bulge_02.json",
+      "cacheRelativePath": "fa/faa8804ecc2df10b_9cb9f1cb452ee99626ffc7a67c69bf11",
+      "sha256": "b61aeba513bf72d93943ca948a8c58c0840032642d340514424fb63c7a2776d1",
+      "outputSHA256": "4bc193c7457a0b9bb6c4e064258dc8e784c02dae08e96749d069f66218d10962",
+      "meshIndex": 0,
+      "meshName": "polySurfaceShape2",
+      "omittedLODMeshNames": [
+        "polySurfaceShape2 LOD 160",
+        "polySurfaceShape2 LOD 80",
+        "polySurfaceShape2 LOD 40",
+        "polySurfaceShape2 LOD 20",
+        "polySurfaceShape2 LOD 10"
+      ]
+    },
+    {
+      "uri": "res:/graphics/generic/vortex/tree_tightends_01a.gr2",
+      "file": "geometry/tree_tightends_01a.json",
+      "cacheRelativePath": "4a/4a848946b5ee60d6_2b27652978c6277f81537c56882c15d7",
+      "sha256": "81863701b3ce665831153e4e94ea1d9762995713bb025efd1e7abb36fdd6747c",
+      "outputSHA256": "fca69afdd8e9d4a7777d617577ded12ca42812899f6f9d207f092f0b51ccf0fc",
+      "meshIndex": 0,
+      "meshName": "polySurfaceShape1",
+      "omittedLODMeshNames": [
+        "polySurfaceShape1 LOD 1280",
+        "polySurfaceShape1 LOD 640",
+        "polySurfaceShape1 LOD 160",
+        "polySurfaceShape1 LOD 80",
+        "polySurfaceShape1 LOD 40",
+        "polySurfaceShape1 LOD 20"
+      ]
+    },
+    {
+      "uri": "res:/graphics/generic/vortex/cone3_hr.gr2",
+      "file": "geometry/cone3_hr.json",
+      "cacheRelativePath": "19/19f01f848deec0ef_a73657974fc01c57a135da69075aad51",
+      "sha256": "f7d5fcef170241a4e846a5cafc35e7fdaddb1cc0f901a55607178e1336a33e85",
+      "outputSHA256": "107d8799c34e2697ea4632e26c0c57f11d48addce3e310e53899084eee30a7e9",
+      "meshIndex": 0,
+      "meshName": "polySurfaceShape2",
+      "omittedLODMeshNames": [
+        "polySurfaceShape2 LOD 80",
+        "polySurfaceShape2 LOD 40",
+        "polySurfaceShape2 LOD 20",
+        "polySurfaceShape2 LOD 10"
+      ]
+    },
+    {
+      "uri": "res:/graphics/generic/vortex/cone2.gr2",
+      "file": "geometry/cone2.json",
+      "cacheRelativePath": "ea/eac4cd3a6ea8b569_b124524ba532ff6c06d2c77416ff1070",
+      "sha256": "004baec6c1d035789f0e6bc41a4cf8f86321e5332c2d9f18450926faccf1e04e",
+      "outputSHA256": "8fcd1f9470a6fb6ab4f19aa10a3394b3dbf20e594dc570ebf9bee40a4d537372",
+      "meshIndex": 0,
+      "meshName": "pCylinderShape1",
+      "omittedLODMeshNames": [
+        "pCylinderShape1 LOD 20480",
+        "pCylinderShape1 LOD 160",
+        "pCylinderShape1 LOD 80",
+        "pCylinderShape1 LOD 40",
+        "pCylinderShape1 LOD 20",
+        "pCylinderShape1 LOD 10"
+      ]
+    },
+    {
+      "uri": "res:/graphics/generic/vortex/sucker_01.gr2",
+      "file": "geometry/sucker_01.json",
+      "cacheRelativePath": "20/204d3fac5526ae7f_5e13c4a2ab6e5a615237d737dfd2e47c",
+      "sha256": "7af1a381d3f603dc2c316d275fef92b82e2090ae7f2572dfea95dff7c8bc5205",
+      "outputSHA256": "f236d363de566635ddcb2010ceac30e55f450808a61084f39e0f70dafbf76fdd",
+      "meshIndex": 0,
+      "meshName": "polySurfaceShape2",
+      "omittedLODMeshNames": [
+        "polySurfaceShape2 LOD 80",
+        "polySurfaceShape2 LOD 40",
+        "polySurfaceShape2 LOD 20",
+        "polySurfaceShape2 LOD 10"
+      ]
+    }
+  ],
+  "textures": [
+    {
+      "uri": "res:/texture/fx/caustics/caustic_05.dds",
+      "file": "textures/caustic_05.png",
+      "cacheRelativePath": "fa/fa3e245cf09fae12_5048337c3b3f8c90587128120e5e2dec",
+      "sha256": "0b568f30ac92f30898200a8847ab78af08b6b0eb52ff908e51f0df6fe164ee04",
+      "outputSHA256": "2caf782a8fd602e0efd90c698dafcbe37aa621814734cd77d9ea1352cd05a9a0"
+    },
+    {
+      "uri": "res:/texture/fx/caustics/caustic_06.dds",
+      "file": "textures/caustic_06.png",
+      "cacheRelativePath": "b9/b9fac044d96865c5_7ac2b87df968c2d2def631b3393dab30",
+      "sha256": "01cc0e84a969eb76839a413b633026f903a30055878d795a1c60fb50402cc3bd",
+      "outputSHA256": "6e5e2a2fc3ef0ae4a9b1cf9cb07390c041c5fea5019511c523c15e685d548fd1"
+    },
+    {
+      "uri": "res:/texture/fx/caustics/caustic_10.dds",
+      "file": "textures/caustic_10.png",
+      "cacheRelativePath": "3b/3bc98c3d089bce40_b605c84268608f6639b9187a7dbb5f17",
+      "sha256": "56aa786a1341cf0610cf26613718d891ef1340c3ea49556f8d8581758349654b",
+      "outputSHA256": "d5271a601948c9a1d9bff9f1a5f3fae77443511d2275c770b8aa488649da362b"
+    },
+    {
+      "uri": "res:/texture/fx/caustics/caustic_12.dds",
+      "file": "textures/caustic_12.png",
+      "cacheRelativePath": "2a/2aaf804e1898c142_fe4ad97fa545dfc761e1a51f6f729b43",
+      "sha256": "5226ac01cdd4eff35c6f2b2bc46c6339757f064784851f901b9055056cc62223",
+      "outputSHA256": "d35baabdb0601230d445205c06c3838bba93a31cfa38c71746bc38c602cb1fb2"
+    },
+    {
+      "uri": "res:/texture/fx/caustics/caustic_13.dds",
+      "file": "textures/caustic_13.png",
+      "cacheRelativePath": "ac/ac66d845d5346fef_d78d2161a4fe51ebd2d8657ea72b2b07",
+      "sha256": "d40fc1983bbf9cced85544e919bfe5f6b20e1df60c9cac80bb501db40d92bd81",
+      "outputSHA256": "0ea66decde194828c9417a1e5e324bef08b9409a7db4b34657cad34c3020c255"
+    },
+    {
+      "uri": "res:/texture/fx/gradients/aurora_01.dds",
+      "file": "textures/aurora_01.png",
+      "cacheRelativePath": "56/56567239658b61da_6e733d0c6a59c892c00998573639962e",
+      "sha256": "cd8c83d7da97d0c018c52aa495e99102c8691c1c7e24174a6b78ac8a322f0b8f",
+      "outputSHA256": "cd8a8e9e77c424ee6b938ef469323fa9c3b2972aa6e905bc6fb39a7e914727c5"
+    },
+    {
+      "uri": "res:/texture/fx/gradients/aurora_01c.dds",
+      "file": "textures/aurora_01c.png",
+      "cacheRelativePath": "c8/c8177cf89c857b57_7681bd64d5bfd4af40b148b11974c7a1",
+      "sha256": "d1765ed316f6178ee1402acbac9be801740d4c1928fcb0c6dee54ba620e7ad92",
+      "outputSHA256": "dfe84b73f92cfb767bf104647b1c231d17248a8643c70fc13b76299ee062e81b"
+    },
+    {
+      "uri": "res:/texture/fx/gradients/buildramp_03.dds",
+      "file": "textures/buildramp_03.png",
+      "cacheRelativePath": "75/755b751241bc6d1a_3a14287e4fe2313e71d0f00487e422c3",
+      "sha256": "5d6f5158b018d8ba7f4981ae67b29fa171efab0b511346ac0c562371b6e6cde2",
+      "outputSHA256": "93721075768ea954030bfe5dfc774a3cf418a912ca1d5ef3a900d9f92fbaa5b1"
+    },
+    {
+      "uri": "res:/texture/fx/gradients/structurestretchgradient_01.dds",
+      "file": "textures/structurestretchgradient_01.png",
+      "cacheRelativePath": "e1/e18eb39f715200a4_bb58dba1a31faa9d03f485a17e3d825d",
+      "sha256": "f6dbb672885ff7b0db589ff847c8826835a69aba944a76066a8685a23397ef81",
+      "outputSHA256": "0a192d134d6514c02b2b53df5936b15d7baf3b7d4fcf87ea584e8f06e8dded1f"
+    },
+    {
+      "uri": "res:/texture/fx/gradients/structurestretchgradient_01d.dds",
+      "file": "textures/structurestretchgradient_01d.png",
+      "cacheRelativePath": "2d/2ddceea62b446b02_58e34a787d25ce2f2363b45462d96d39",
+      "sha256": "46c741f16210fcec51c07ee2a52b33d1445f2dc3e4f20aef6050aadb6b5f23d2",
+      "outputSHA256": "a4b2bdb71606ce11471c310079cc7d95ffe65d89f88df049e6d62958ae54c697"
+    },
+    {
+      "uri": "res:/texture/fx/gradients/wavegradient_01.dds",
+      "file": "textures/wavegradient_01.png",
+      "cacheRelativePath": "da/da2f03d60b0231eb_36dc115f8f4814b33ca7d46984ea09fa",
+      "sha256": "634598576459c76ea22e1aa4d90a6496fdbc66e695ac473279edc011f72ad0a3",
+      "outputSHA256": "a0b6ba173452807839eee7207871026acce3b073c29755eb9bfc4d1fd9426c88"
+    },
+    {
+      "uri": "res:/texture/fx/gradients/whitesharp_bw_01a.dds",
+      "file": "textures/whitesharp_bw_01a.png",
+      "cacheRelativePath": "15/153428fc13c2fe5a_cfb1c9141b2d81f9d1644cc961a0f78f",
+      "sha256": "75627f9d19525d786b99096800d16c1f6eab7f260f1c82fa64921d14b6dd4556",
+      "outputSHA256": "d02f48844e4a49b10da541ffb00b054955d0f0b4897febe64917d663c3aa46fd"
+    },
+    {
+      "uri": "res:/texture/fx/gradients/whitesharpproper_cyan_01a.dds",
+      "file": "textures/whitesharpproper_cyan_01a.png",
+      "cacheRelativePath": "76/76014d70ef276bbc_e782bc5f667bcbe16a188020afe3f0b0",
+      "sha256": "35f6d0171b7d22a931db90251c5a852ca325704f6b8678c50f81545b78461c59",
+      "outputSHA256": "aaaa1e01b07fd5ceb8e49a5f09e60a0d767427277b0fc917d9e27d7d83f0e893"
+    },
+    {
+      "uri": "res:/texture/fx/gradients/whitewideproper_01a.dds",
+      "file": "textures/whitewideproper_01a.png",
+      "cacheRelativePath": "cd/cdd58b864b010c77_50c19639b98347933fcb7d6abc200845",
+      "sha256": "f1b68bdd46db4e2513035157336a0ed5da66acc4267801860630920771cb1933",
+      "outputSHA256": "dc1a732c2d210ae54bc78fee612c254a537a84aa36c871b225e5fb3c83edc62c"
+    },
+    {
+      "uri": "res:/texture/fx/lightnings/fx_electro_03b.dds",
+      "file": "textures/fx_electro_03b.png",
+      "cacheRelativePath": "ad/ad6456307bf9f337_8450ccfcbfc324a8b4c5b8069c4a53ed",
+      "sha256": "5596d8ee02bee864485ea514c6570a37926cce6a59bd7f266fbff50792f00515",
+      "outputSHA256": "1d37d2db335f901a39057ec1f16fac1ad2f4a3f45abf0cf82a9b6310cce545f0"
+    },
+    {
+      "uri": "res:/texture/fx/lightnings/lightning5x_h_01b.dds",
+      "file": "textures/lightning5x_h_01b.png",
+      "cacheRelativePath": "a3/a3f44c1dc9a52724_4ff0fda59aa78c326cc3914d1cca2c4d",
+      "sha256": "8421265a786299fb3890c1e930a3777d03b0cf4b70bbdecdb07ca133aa310049",
+      "outputSHA256": "dab36ecd5f3046984bcf9d6e616b8921212d8faa876ec76706866371259c320c"
+    },
+    {
+      "uri": "res:/texture/fx/lightnings/lightning_05b.dds",
+      "file": "textures/lightning_05b.png",
+      "cacheRelativePath": "24/2400d89c9f38d7d2_44c03c2d5309e6893e24983311fbe711",
+      "sha256": "a2625139b4ea5e5c54bce3ab84d229e65f38134f838ba03a3af985774c00932f",
+      "outputSHA256": "705688a97ffa42ca354597ae0c3e89b5c911c56a05c6311f215347b3c58b3e47"
+    },
+    {
+      "uri": "res:/texture/fx/misc/wavegrid_01a.dds",
+      "file": "textures/wavegrid_01a.png",
+      "cacheRelativePath": "28/28796949381b3ec5_2e36883ea051f8f7625c91e6246f815e",
+      "sha256": "1d1889df61d0e4baab63900c45bfadcc928b28847c721a6139ec00acc5cb93d7",
+      "outputSHA256": "f07fed5245ee53eb5e43935628f45b9cd8c2866e2cec1c6714fb74e5aca04529"
+    },
+    {
+      "uri": "res:/texture/fx/smoke/smoke_caustic_02a.dds",
+      "file": "textures/smoke_caustic_02a.png",
+      "cacheRelativePath": "e1/e11c193d652c0cc4_b98c75b145940c9188eaee2a1f493824",
+      "sha256": "565c77445c75a8c9109362a0b91815edc87ccdfe16dd7366a803281546ec873f",
+      "outputSHA256": "2900053d68949761aed5053a65e814b95b03e75bf48f84b3b3561c8bd8d35c04"
+    },
+    {
+      "uri": "res:/texture/particle/whitesharphifi.dds",
+      "file": "textures/whitesharphifi.png",
+      "cacheRelativePath": "78/7885e461ef18f047_50e169366e84a74332002cc5bfd1168d",
+      "sha256": "11386f3ffe8bc6fa3d662d22df20515585d05d17399eb878446809b6b0f69a57",
+      "outputSHA256": "ce6d109504f526abdd9151caf79fca14b206d324533746156302dd854e97b944"
+    },
+    {
+      "uri": "res:/texture/patterns/moire_01a.dds",
+      "file": "textures/moire_01a.png",
+      "cacheRelativePath": "aa/aa0fd02fdeacd5f0_4c8c2cfbf83f266a73d717887c50816d",
+      "sha256": "fe4279070b2be8e766ebe42f3ea84798447c822ddccbaeb773303a861e4a08f7",
+      "outputSHA256": "1abcd01616b2df2467f55c7592fff77f3c91abc9f699becec7da56c6bcec8655"
+    },
+    {
+      "uri": "res:/texture/sprite/astroiddirt.dds",
+      "file": "textures/astroiddirt.png",
+      "cacheRelativePath": "8b/8b0e79b9d178c786_345b368389680ea43ef45e23c7309ae9",
+      "sha256": "6d47d3df15ec75cbc816ef501f3a37fcb236c7729c5bbdb8c51f292d99a5eef8",
+      "outputSHA256": "6eb849e5b5051cf2e141c78cc3a63abf8a20b8c6ed0ad76aa5b658819e2e7ee8"
+    },
+    {
+      "uri": "res:/texture/sprite/beam4.dds",
+      "file": "textures/beam4.png",
+      "cacheRelativePath": "a5/a57fe67b20cddab0_d82afeb020a92c7ef2d0525af34f0223",
+      "sha256": "566a9f56652b4f54df4ac3001a3c72ef2aa62c9a54d9ed824b3e8004493db822",
+      "outputSHA256": "a7634650ac0e4f68a75c098ae5cbc28db97ef907f79cf7e53c1fdae5d524305c"
+    },
+    {
+      "uri": "res:/texture/sprite/breach_hole_auto.dds",
+      "file": "textures/breach_hole_auto.png",
+      "cacheRelativePath": "82/82f297f137c34465_a9dc4632baca3ae8f820f8a179bf990c",
+      "sha256": "6377e3f2d40e64538f6015df5d616d8d3a70e9d1de0d0ca369bf5bc8c220e1c6",
+      "outputSHA256": "7882a2c61379c4e27df73f361af0aa5ed164db8b3bc9f52625d8996b10dc6c75"
+    },
+    {
+      "uri": "res:/texture/sprite/caustics2.dds",
+      "file": "textures/caustics2.png",
+      "cacheRelativePath": "0e/0e1e4fcdb074ad68_f8605e578f5704fcea37fd9e90462d2c",
+      "sha256": "ddf42bb10f9b4d6053716e321a2e949b11cf55f430b3b532d5c458930962b89b",
+      "outputSHA256": "287eca7e1fb910e0df32c2e6aea208dc79d54da45df25ac067f729b8bb032169"
+    },
+    {
+      "uri": "res:/texture/sprite/caustics3.dds",
+      "file": "textures/caustics3.png",
+      "cacheRelativePath": "8f/8fd49fc56d0e9a9d_44febe9dc8fb9b69e4f4565833261cdf",
+      "sha256": "d8a36291afa69cd3faed146a9d157adaf26e0db150e3620bc8b7deb0cd9f72f3",
+      "outputSHA256": "bbaee3a1d94f534ec96ee3486f5549b63136c63a54502bdc6f4711f911c68605"
+    },
+    {
+      "uri": "res:/texture/sprite/laser.dds",
+      "file": "textures/laser.png",
+      "cacheRelativePath": "fd/fdeeb9b81ebb54d2_1c87edaa45892dc8ac115eae68b99821",
+      "sha256": "9c1db3f2adf0793e3381d10fc5f906f11b78e365d03ab45d13172bab4c6fb6a6",
+      "outputSHA256": "7d460f58a85fc4f667ec35c4e191bca3e92e4cf6f7b7ac4691fc2778b27f98d0"
+    },
+    {
+      "uri": "res:/texture/sprite/sensor.dds",
+      "file": "textures/sensor.png",
+      "cacheRelativePath": "c1/c126a2782f9dd0d1_393598c3598282b288dc07224bf6dbe1",
+      "sha256": "663ff530cde3d40e0298618b569586059f0a72477e315769407723110186c9c5",
+      "outputSHA256": "b5bf4a1c1a46272af68b36232599b8092e3af720e8bac8aeab3252f48b979ce7"
+    },
+    {
+      "uri": "res:/texture/sprite/sphere_capmask5.dds",
+      "file": "textures/sphere_capmask5.png",
+      "cacheRelativePath": "58/5861e936826c11cc_512058457918c4ed7b9cdf7e645e0a3f",
+      "sha256": "4d8645af543aab6a1af157daf1506f628ad4bbd1b1022683f49186facf6ef08a",
+      "outputSHA256": "54610fbc0022c03d7dfeec0d86cf4b733dd9a3be8bd8b279e8f9f4225d0ef0d5"
+    },
+    {
+      "uri": "res:/texture/sprite/topbottom.dds",
+      "file": "textures/topbottom.png",
+      "cacheRelativePath": "51/51e1da59c5d5c873_51ac24590a04f9bb78ec4200f1caf7ea",
+      "sha256": "83307d6754d1d241b376fbe17f199f7c9945f9ad3ec0af77fece0776b57d0ee5",
+      "outputSHA256": "0d9822e94f6472b2ad1a9070948b69a0e77d1c49e8f146cbe45f370ec939a2fe"
+    },
+    {
+      "uri": "res:/texture/sprite/wave_lightblue.dds",
+      "file": "textures/wave_lightblue.png",
+      "cacheRelativePath": "ba/ba89c0b45fcf5099_73bbe5b14b637a12f28e12ee80787bd6",
+      "sha256": "87dd519f1c0eb1c8897a7256661fdd5b785d13f4a7c7cbd587ae2cf4ad6baa05",
+      "outputSHA256": "259a730127cfa26f18528f69ebd57d5825ecb8c65aa8efd94f9f3ab3c348901c"
+    },
+    {
+      "uri": "res:/texture/sprite/waves.dds",
+      "file": "textures/waves.png",
+      "cacheRelativePath": "a6/a6967cdcf08273d5_29c5c2c3a46cda7f18eecf4281a33674",
+      "sha256": "c72e48f54349f0cf26e9d188fe6a0c201bf9c86a407b2ad0d04c5c0520663b41",
+      "outputSHA256": "7136d1c47edb3c8c14fb876c8b21dbafb9021379d19af82bc7085a5c995878c6"
+    },
+    {
+      "uri": "res:/texture/sprite/y_negative_ramp_01.dds",
+      "file": "textures/y_negative_ramp_01.png",
+      "cacheRelativePath": "be/bedadd33bf80b9e9_30b2b61a367730387091281023460011",
+      "sha256": "e3a8851776e204e3fdb6313a605fc75d3f5c67df5d2f4848d730761def06693d",
+      "outputSHA256": "986d2a684ea1a7021590f0b2c003a1b81a2419b46538f6821c6dc1481814ec3e"
+    },
+    {
+      "uri": "res:/texture/sprite/y_positive_ramp_01.dds",
+      "file": "textures/y_positive_ramp_01.png",
+      "cacheRelativePath": "cc/cce8d1158c8e5705_edc7e3ac2f80a25578523f4a17e48ed3",
+      "sha256": "3502046a619a832399ba287133570ab359056c9889f15b94296ea3bf54864deb",
+      "outputSHA256": "86a11525ac93a3bfb502dabfd0cc549ec28de427a47892a60cbfd975120b513f"
+    }
+  ],
+  "shaders": [
+    {
+      "uri": "res:/graphics/effect.dx11/managed/space/specialfx/ubershader.sm_hi",
+      "cacheRelativePath": "cf/cf1d68cfe0441e80_99c8d36f338d2cb5ec759ecebd715736",
+      "sha256": "dac28e0606007d0ba62e7a0cd8c46ad69f13ceca1b3c71c287b319fc53ff6913"
+    },
+    {
+      "uri": "res:/graphics/effect.dx11/managed/space/specialfx/lensflares/flare.sm_hi",
+      "cacheRelativePath": "b7/b7dc3a9417ea2465_52477d867dacd87d8b5cf3d6f43bfe3c",
+      "sha256": "acfc4a5238f318ee6541109999025d72006cfaaf42725b333d716615708ae126"
+    },
+    {
+      "uri": "res:/graphics/effect.dx11/managed/space/specialfx/ubershadertwosided.sm_hi",
+      "cacheRelativePath": "29/297470d918ee42bd_bf8f2f62e41c76c51cbab25566bffdcf",
+      "sha256": "cce204288113312c8a6f1700418c0558cbd5135bd49c87d11e86e0c2ecf9343e"
+    },
+    {
+      "uri": "res:/graphics/effect.dx11/managed/space/specialfx/texturecolor.sm_hi",
+      "cacheRelativePath": "e2/e21d9aa86b6f04ed_720a2f9ce6e2feb11e2dadde188c10b3",
+      "sha256": "9ec444b4dac706e02aecfc197ee2a9f340f02d352f3d579f339fe87e523a7e89"
+    }
+  ],
+  "adaptation": "Original suppression/ECM effects, ECM receiver reference, target-painter and tractor connection graphs, LOD0 meshes, UVs, native material parameters, texture maps and curve bindings. Godot renderer, display scale and continuous-state timing are local adapters."
+}

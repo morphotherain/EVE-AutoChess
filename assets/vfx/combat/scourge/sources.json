@@ -1,0 +1,157 @@
+{
+  "uri": "res:/dx9/model/turret/launcher/heavy/heavy_impact_scourge.black",
+  "sha256": "d6e6186477f9b92402ab1897787cce12b45e57f909ed1e581877ed7e983a3626",
+  "geometry": [
+    {
+      "file": "cone.obj",
+      "uri": "res:/graphics/generic/vortex/cone2_fixeduvs_highdetail_z.gr2",
+      "sha256": "48842f77b16dbe78cfb416a9a140ee5c25b0d69230e18c55f91c8afaf2e8735e",
+      "vertices": 1720,
+      "triangles": 3120
+    },
+    {
+      "file": "wave.obj",
+      "uri": "res:/graphics/generic/unitplane/unitplane_mirroreddoublesided_01b.gr2",
+      "sha256": "d511026548493ee97b2ee516ee3ac8ccc0a8d296b9d106b59468ba27b68730be",
+      "vertices": 32,
+      "triangles": 24
+    },
+    {
+      "file": "halo_a.obj",
+      "uri": "res:/graphics/generic/custom/halo_01a.gr2",
+      "sha256": "fd90fddc479383c010cc37a8032513a87917170d3e002d84613a6ac89f5278b2",
+      "vertices": 512,
+      "triangles": 256
+    },
+    {
+      "file": "halo_b.obj",
+      "uri": "res:/graphics/generic/custom/halo_01b.gr2",
+      "sha256": "3a62f9b75f4890439627ad535467214bf9a5d251bbcc29fa1366bc80806bc81a",
+      "vertices": 512,
+      "triangles": 256
+    }
+  ],
+  "textures": [
+    {
+      "file": "ramp_abyss_electric_01c.png",
+      "uri": "res:/texture/fx/gradients/ramp_abyss_electric_01c.dds",
+      "sha256": "f5176dcb7e149ad36a024eed8a28ad127df3d7da6cd1d05917abe0d3578f758f"
+    },
+    {
+      "file": "explosionflash_01b_flw.png",
+      "uri": "res:/texture/fx/motionparticles/explosion/explosionflash_01b_flw.dds",
+      "sha256": "824e110fe65005f6b6066bbc7966afd2cb8e3b8081ee3a6a97a8478f1d4a267a"
+    },
+    {
+      "file": "explosionflash_01b.png",
+      "uri": "res:/texture/fx/motionparticles/explosion/explosionflash_01b.dds",
+      "sha256": "03389a636ddf277ba9fdb3a491eed5e16f8ca419ed96d207d79e3b7496d558c4"
+    },
+    {
+      "file": "particle_06a_elementb_flw.png",
+      "uri": "res:/texture/fx/motionparticles/explosion/particles/particle_06a_elementb_flw.dds",
+      "sha256": "5d539a829ddb86ce2dbc7376a9e8be0e91a72edd9f6ab1f3d536d5b19aaaac58"
+    },
+    {
+      "file": "particle_06a_elementb2.png",
+      "uri": "res:/texture/fx/motionparticles/explosion/particles/particle_06a_elementb2.dds",
+      "sha256": "ee7f9351026f68298de1bb5acca9f80c618dfd41dac60a911e1b357f43851852"
+    },
+    {
+      "file": "fx_electro_06a.png",
+      "uri": "res:/texture/fx/lightnings/fx_electro_06a.dds",
+      "sha256": "14a78221912e940ac4420d24703bf2874ddccf5efc2418ab6b4c6f7e1d1599f9"
+    },
+    {
+      "file": "caustic_01b.png",
+      "uri": "res:/texture/fx/caustics/caustic_01b.dds",
+      "sha256": "3eaf3b192a05f8c22b29b224fc67d9888e6ca82faebd6e04656561667bbfd4cc"
+    },
+    {
+      "file": "aurora_01_bw2.png",
+      "uri": "res:/texture/fx/gradients/aurora_01_bw2.dds",
+      "sha256": "3f5779f8ccc08b76297608fa98931e077503ad833c3f980a4de116abb8f65fd3"
+    },
+    {
+      "file": "ramp_blue_02c.png",
+      "uri": "res:/texture/fx/gradients/ramp_blue_02c.dds",
+      "sha256": "a129a0678c4fed2ebfd4e8ff98cd2dc0fed9cf551d5aef59cba0c6fa853204ac"
+    },
+    {
+      "file": "caustic_16e2.png",
+      "uri": "res:/texture/fx/caustics/caustic_16e2.dds",
+      "sha256": "d44bf4b969668b266627d811dfbbcc8e913a497ac62cf10dcb5a7eaa1e1d6c30"
+    },
+    {
+      "file": "caustic_13d2.png",
+      "uri": "res:/texture/fx/caustics/caustic_13d2.dds",
+      "sha256": "4a0840b4f82be28f038ec267f8c6687fc98a295b12d0661373db5b685a72b73f"
+    },
+    {
+      "file": "circles_02a.png",
+      "uri": "res:/texture/patterns/circles_02a.dds",
+      "sha256": "86f76126aa430d141b6d74fd315b215384e38d2a9c1a4fbc45e11ee43b8ba845"
+    },
+    {
+      "file": "caustic_13c2.png",
+      "uri": "res:/texture/fx/caustics/caustic_13c2.dds",
+      "sha256": "8f6881e56811407be99ff8c20e8b7d47e17ccfd31ac9a3e233c994187f51ca6e"
+    },
+    {
+      "file": "caustic_05c.png",
+      "uri": "res:/texture/fx/caustics/caustic_05c.dds",
+      "sha256": "6444dd36c838eaf8e5e57d93a052f9cebc9d53acb3a3e079eaaba03f0d7abba7"
+    },
+    {
+      "file": "vertical_graviton_02a.png",
+      "uri": "res:/texture/fx/gradients/vertical_graviton_02a.dds",
+      "sha256": "97a5e34241d696f45aee2ce436ea4b3e3bcab6ee3aa07dcc5e41bbd5968d9e93"
+    },
+    {
+      "file": "caustic_12d.png",
+      "uri": "res:/texture/fx/caustics/caustic_12d.dds",
+      "sha256": "0766a2d06322ffa362e45a851d4ddc800193b8b11c29d64bdf541c8fa7c955c0"
+    },
+    {
+      "file": "caustic_17.png",
+      "uri": "res:/texture/fx/caustics/caustic_17.dds",
+      "sha256": "02d27809c461b50f369c9ce4a80c12c7fffb0ecf4c847426ef66ee40fa46b0ae"
+    },
+    {
+      "file": "aurora_01.png",
+      "uri": "res:/texture/fx/gradients/aurora_01.dds",
+      "sha256": "cd8c83d7da97d0c018c52aa495e99102c8691c1c7e24174a6b78ac8a322f0b8f"
+    },
+    {
+      "file": "warptunnel4_n.png",
+      "uri": "res:/texture/sprite/warptunnel4_n.dds",
+      "sha256": "b6f837d499841b2aafb270f4753419561df566bf9b297ffbaa4abb5d45c7b892"
+    },
+    {
+      "file": "puff3.png",
+      "uri": "res:/texture/particle/puff3.dds",
+      "sha256": "de13fff6e0b553fec9f7ad24cf61c7f0c14029b1a94f1f029e81815198e2c92e"
+    },
+    {
+      "file": "caustic_16e.png",
+      "uri": "res:/texture/fx/caustics/caustic_16e.dds",
+      "sha256": "02ffb0c3e6e0ef7b53965963801f36fb4331e796ad330705d1b4ed4b16cf6c88"
+    },
+    {
+      "file": "ramp_auroras_01a.png",
+      "uri": "res:/texture/fx/gradients/ramp_auroras_01a.dds",
+      "sha256": "dfe71d442963af0bc242f4a6e43c4d09622b172eeef148cfc9005a3b47153c8e"
+    },
+    {
+      "file": "ramp_bioluminescence_01a.png",
+      "uri": "res:/texture/fx/gradients/ramp_bioluminescence_01a.dds",
+      "sha256": "eb6d31d8122a97acb375b29797e4be06844e63c90395debe913d3f6b300ef4e5"
+    },
+    {
+      "file": "explosionflash_01a.png",
+      "uri": "res:/texture/fx/motionparticles/explosion/explosionflash_01a.dds",
+      "sha256": "e578a5952439d096e4090b4dce5659a304c36d834eb04fcaae61e596e14d550a"
+    }
+  ],
+  "adaptation": "Scourge luminous composition: original meshes, maps, parameter values and scalar curves. Godot material adapters; compressed timeline, bounded particle counts and no smoke/audio emitters."
+}

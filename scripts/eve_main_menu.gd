@@ -1920,6 +1920,8 @@ func _on_sel(b: Button, nm: Label, mt: Label, bar: ColorRect, ch: Label,
 
 func _on_mode_pressed(i: int) -> void:
 	var m: Dictionary = _modes[i]
+	if i != _mode_idx or bool(m.get("parent", false)):
+		EveUiAudio.play("menu.mode")
 	# ★ 2026-10-12：父项（自走棋）—— 点击 = 展开 / 收起（用户定：展开后自动选中
 	#   第一个子项「任务关卡」，玩家一步到位，不用点两次）。
 	if bool(m.get("parent", false)):
@@ -1947,6 +1949,7 @@ func _on_strip_input(event: InputEvent, idx: int) -> void:
 			return
 		_pick[id] = idx
 		_refresh_strips()
+		EveUiAudio.play("menu.mode")
 
 
 ## 「开始」——目前只有守卫边境是开放难度。
@@ -2037,6 +2040,7 @@ func _on_start_pressed() -> void:
 	var sel := int(_pick[_content_id()])
 	var target := target_scene_for_start()
 	if target == "":
+		EveUiAudio.play("ui.reject")
 		# ⚠️ 不能静默 return：玩家点了「开始」必须知道为什么没动静（红线 9）。
 		if _content_id() == CARD_ROOM_MODE_ID:
 			if String(cards[sel]["code"]) == "DOUDIZHU":
@@ -2074,17 +2078,20 @@ func _on_start_pressed() -> void:
 		RUN_STORE.pending_versus_ai = 0
 		RUN_STORE.pending_versus_role = ""
 	RUN_STORE.session_active = true
+	EveUiAudio.play("menu.start")
 	get_tree().change_scene_to_file(target)
 
 
 ## 「继续上局」：直接恢复上一局的存档（⛔ 不经过开场剧情）。
 func _on_continue_run() -> void:
 	if not RUN_STORE.has_run():
+		EveUiAudio.play("ui.reject")
 		_show_toast(T.t("MENU_TOAST_NO_RUN", "没有可继续的对局"))
 		return
 	print("[主界面] 继续上一局 → %s" % BATTLE_SCENE)
 	RUN_STORE.session_active = true
 	RUN_STORE.resume_requested = true
+	EveUiAudio.play("menu.start")
 	get_tree().change_scene_to_file(BATTLE_SCENE)
 
 
