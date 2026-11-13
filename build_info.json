@@ -1,5 +1,5 @@
 {
   "_note": "导出时由 tools/publish_hotfix.sh / export_release.sh 自动重写。客户端 EveUpdater 读它决定是否需要热更，别手改。",
-  "version": "0.15.0.0.1",
-  "code": 45
+  "version": "0.15.0.0.2",
+  "code": 46
 }

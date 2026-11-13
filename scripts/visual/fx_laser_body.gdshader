@@ -41,8 +41,10 @@ void vertex() {
 	POSITION = PROJECTION_MATRIX * VIEW_MATRIX * vec4(pos, 1.0);
 }
 void fragment() {
+	// [PITFALL] 禁用 discard（D3D12+Intel Arc 会设备丢失），改存活遮罩
+	float alive = 1.0;
 	float t = age - delay;
-	if (t < 0.0 || t >= lifetime) { discard; }
+	if (t < 0.0 || t >= lifetime) { alive = 0.0; }
 	float k = t / lifetime;
 	float envelope = laser_power(t);
 	if(miss_fraction<0.999) { envelope *= pow(1.0-smoothstep(miss_fraction,1.0,UV.y),1.4); }
@@ -69,6 +71,6 @@ void fragment() {
 	float tips = smoothstep(0.0, 0.055, s) * smoothstep(0.0, 0.055, beam_length - s);
 	vec3 hot = vec3(1.9, 1.75, 1.35) * core;
 	vec3 body = tint.rgb * (sheath * 0.60 + threads * filament_strength + envelope_edge * 0.08);
-	ALBEDO = (hot + body) * envelope * tips * energy;
+	ALBEDO = (hot + body) * envelope * tips * energy * alive;
 	ALPHA = 1.0;
 }

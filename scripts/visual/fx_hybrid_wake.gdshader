@@ -68,8 +68,10 @@ void fragment() {
 		float distance = UV.y * path_length;
 		arrival = (sqrt(initial_speed * initial_speed + 2.0 * flight_acceleration * distance) - initial_speed) / flight_acceleration;
 	}
+	// [PITFALL] 禁用 discard（D3D12+Intel Arc 会设备丢失），改存活遮罩
+	float alive = 1.0;
 	float t = age - delay - arrival;
-	if (t < 0.0 || t >= lifetime) { discard; }
+	if (t < 0.0 || t >= lifetime) { alive = 0.0; }
 	vec2 p = vec2(UV.y * path_length, (UV.x - 0.5) * width) / effect_scale;
 	// Advect the original fragments as one coherent wake. Exponential drag
 	// reduces forward speed continuously; the source boundary empties rather
@@ -82,6 +84,6 @@ void fragment() {
 	float radial = exp(-pow(p.y / 0.24, 2.0) * 1.5) * (1.0 - smoothstep(0.32, 0.50, abs(p.y)));
 	float ends = smoothstep(0.0, 0.025, UV.y) * (1.0 - smoothstep(0.975, 1.0, UV.y));
 	float ignite = smoothstep(0.0, 0.015, t);
-	ALBEDO = mix(tint.rgb, vec3(0.85, 1.0, 0.96), 0.50) * strands * radial * ends * ignite * energy * 3.0;
+	ALBEDO = mix(tint.rgb, vec3(0.85, 1.0, 0.96), 0.50) * strands * radial * ends * ignite * energy * 3.0 * alive;
 	ALPHA = 1.0;
 }

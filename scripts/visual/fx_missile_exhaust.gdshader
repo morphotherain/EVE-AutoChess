@@ -36,7 +36,9 @@ void vertex() {
 	POSITION = PROJECTION_MATRIX * VIEW_MATRIX * vec4(p, 1.0);
 }
 void fragment() {
-	if (power <= 0.0001) { discard; }
+	// [PITFALL] 禁用 discard（D3D12+Intel Arc 会设备丢失）。
+	//   本材质是 blend_add，radiance 里已乘 pow(power,0.72)，power≈0 时本就是 0。
+	float alive = power <= 0.0001 ? 0.0 : 1.0;
 	float u = UV.y;
 	float x = UV.x * 2.0 - 1.0;
 	float n = texture(turbulence, vec2(u * 2.6 - age * 1.9, x * 1.1 + seed)).r;
@@ -83,7 +85,7 @@ void fragment() {
 	// EMISSION. Preserve the narrow HDR peak for bloom without widening it.
 	// Raise optical glow through HDR radiance; main-jet dimensions stay fixed.
 	float radiance_gain = sheath < 2.5 || sheath > 3.5 ? 1.35 : 1.0;
-	vec3 radiance = light * throat * pow(power, 0.72) * radiance_gain;
+	vec3 radiance = light * throat * pow(power, 0.72) * radiance_gain * alive;
 	if (sheath > 1.5 && sheath < 2.5) {
 		// Ordinary visible flame responds immediately with engine power.
 		ALBEDO = min(radiance, vec3(1.0));
